@@ -1,2 +1,8 @@
 .idea/
-venv/
+cdrenv/
+csv_reports/
+graphical_reports/
+japan.json
+*joined*.json
+__pycache__
+*ADMIN*
