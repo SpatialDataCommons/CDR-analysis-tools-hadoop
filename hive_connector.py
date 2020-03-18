@@ -9,7 +9,7 @@ class HiveConnector:
         self.conn = connect(config.host, config.port, user='rsstudent', auth_mechanism='PLAIN')
         self.cursor = self.conn.cursor()
 
-    def initialize(self, config, data):
+    def initialize(self, config):
         for command in json_file_to_object('initial_hive_commands.json')['hive_commands']:
             self.cursor.execute(command)
         if not os.path.exists(config.csv_location):
@@ -32,11 +32,11 @@ class HiveConnector:
                             .format(provider_prefix=config.provider_prefix) +
                             "({})".format(', '.join(data.arg_cell_raw)) +
                             'ROW FORMAT DELIMITED ' +
-                            "FIELDS TERMINATED BY ',' " +
+                            "FIELDS TERMINATED BY '{field_delimiter}' ".format(field_delimiter=config.input_cell_tower_delimiter) +
                             "LINES TERMINATED BY '\n' " +
                             "STORED AS TEXTFILE " +
                             'tblproperties ("skip.header.line.count"="1")')
-        print('DONE')
+
         # TODO string delimiter double quote is not checked yet (ask Ajarn.May)
         if len(config.input_cell_tower_files) < 1:
             print('Please check the input_cell_tower_files field in config.json and make sure the file is valid.')
@@ -69,7 +69,7 @@ class HiveConnector:
                             .format(provider_prefix=config.provider_prefix) +
                             "({})".format(', '.join(data.arg_cdr_raw)) +
                             'ROW FORMAT DELIMITED ' +
-                            "FIELDS TERMINATED BY ',' " +
+                            "FIELDS TERMINATED BY '{field_delimiter}' ".format(field_delimiter=config.input_delimiter) +
                             "LINES TERMINATED BY '\n' " +
                             "STORED AS TEXTFILE " +
                             'tblproperties ("skip.header.line.count"="1")')
@@ -103,7 +103,7 @@ class HiveConnector:
             provider_prefix=config.provider_prefix) +
                             "({})".format(', '.join(data.arg_cell_create)) +
                             'ROW FORMAT DELIMITED ' +
-                            "FIELDS TERMINATED BY ',' " +
+                            "FIELDS TERMINATED BY '{field_delimiter}' ".format(field_delimiter=config.input_cell_tower_delimiter) +
                             "LINES TERMINATED BY '\n' " +
                             'STORED AS SEQUENCEFILE')
 
@@ -125,7 +125,7 @@ class HiveConnector:
             'CREATE TABLE {provider_prefix}_preprocess'.format(provider_prefix=config.provider_prefix) +
             "({})".format(', '.join(data.arg_cdr_prep)) +
             'ROW FORMAT DELIMITED ' +
-            "FIELDS TERMINATED BY ',' " +
+            "FIELDS TERMINATED BY '{field_delimiter}' ".format(field_delimiter=config.input_delimiter) +
             "LINES TERMINATED BY '\n' " +
             "STORED AS SEQUENCEFILE")
 
@@ -146,14 +146,17 @@ class HiveConnector:
                        "({})".format(' ,'.join(data.arg_cdr_prep)) + \
                        "PARTITIONED BY (pdt string) " + \
                        "ROW FORMAT DELIMITED " + \
-                       "FIELDS TERMINATED BY ','" + \
+                       "FIELDS TERMINATED BY '{field_delimiter}' ".format(field_delimiter=config.input_delimiter) + \
                        "LINES TERMINATED BY '\n'" + \
                        'STORED AS SEQUENCEFILE'
         self.cursor.execute(create_query)
+        print(data.arg_cdr_con)
         print('### Inserting into the consolidate table ###')
         insert_query = "INSERT INTO TABLE  {provider_prefix}_consolidate_data_all ".format(
             provider_prefix=config.provider_prefix) + \
                        "PARTITION (pdt) select {}, ".format(', '.join(data.arg_cdr_con)) + \
-                       "(call_time) as pdt " + \
+                       "from_unixtime(unix_timestamp(call_time ,'{time_format}'), 'yyyy-MM-dd hh:mm:ss') as pdt "\
+                        .format(time_format=config.input_file_time_format) \
+                       .format(time_format=config.input_file_time_format) + \
                        "from {provider_prefix}_preprocess".format(provider_prefix=config.provider_prefix)
         self.cursor.execute(insert_query)
