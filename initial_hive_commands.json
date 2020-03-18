@@ -1,5 +1,22 @@
 {
   "hive_commands": [
+    "ADD JAR /hadoop/hive/lib/cdrmobilitylib.jar",
+    "ADD JAR /hadoop/hive/lib/cdrmobilitylibge.jar",
+    "ADD JAR /hadoop/hive/lib/cdrmobilitylibjica.jar",
+    "ADD JAR /hadoop/hive/lib/jts-1.12.jar",
+    "ADD JAR /hadoop/hive/lib/jtsio-1.12.jar",
+    "ADD JAR /hadoop/hive/lib/javaml-0.1.6.jar",
+    "ADD JAR /hadoop/hive/lib/weka.jar",
+    "ADD JAR /hadoop/hive/lib/libsvm.jar",
+    "ADD JAR /hadoop/hive/lib/ajt-2.5.jar",
+    "ADD JAR /hadoop/hive/lib/Jama-1.0.2.jar",
+    "create temporary function FindPolygon as 'com.apichon.mobility.hive.udf.FindPolygon'",
+    "create temporary function FindPolygon2 as 'com.apichon.mobility.hive.udf.FindPolygon2'",
+    "create temporary function CreateTrajectoriesCDR as 'com.apichon.mobility.hive.udf.ge.CreateTrajectoriesCDR'",
+    "create temporary function TripSegmentationCDR as 'com.apichon.mobility.hive.udf.ge.TripSegmentationCDR'",
+    "create temporary function CreateTrajectoriesJICAWithZone as 'com.apichon.mobility.hive.udf.jica.CreateTrajectoriesJICAWithZone'",
+    "create temporary function TripOD as 'com.apichon.mobility.hive.udf.jica.TripOD'",
+    "create temporary function TripODStay as 'com.apichon.mobility.hive.udf.jica.TripODStay'",
     "set hive.exec.dynamic.partition.mode=nonstrict",
     "set hive.exec.dynamic.partition=true",
     "set hive.exec.max.dynamic.partitions.pernode = 4000",
@@ -12,6 +29,16 @@
     "set mapred.reduce.slowstart.completed.maps=0.98",
     "set mapred.job.reuse.jvm.num.tasks=50",
     "set hive.support.sql11.reserved.keywords=false",
-    "use cdrproject"
+    "set mapred.child.java.opts=-Xmx4096m -XX:-UseGCOverheadLimit -XX:+UseConcMarkSweepGC",
+    "set hive.map.aggr.hash.percentmemory = 0.25",
+    "use cdrproject",
+    "add jar /hadoop/hive/lib/commons-pool-1.5.4.jar",
+    "add jar /hadoop/hive/lib/commons-dbcp-1.4.jar",
+    "add jar /hadoop/hive/lib/commons-lang-2.6.jar",
+    "add jar /hadoop/hive/lib/commons-logging-1.1.3.jar",
+    "add jar /hadoop/hive/lib/commons-math-2.1.jar",
+    "add jar /hadoop/hive/lib/jts-1.13.jar",
+    "add jar /hadoop/hive/lib/vecmath-1.3.2.jar",
+    "create temporary function sp_distance as 'com.apichon.mobility.hive.udf.sp_distance'"
   ]
 }
