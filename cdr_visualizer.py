@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import os
 from hive_connector import HiveConnector
 import helper as hp
+from impala.util import as_pandas
 
 months = {1: 'January', 2: 'February', 3: 'March', 4: 'April', 5: 'May', 6: 'June',
           7: 'July', 8: 'August', 9: 'September', 10: 'October', 11: 'November', 12: 'December'}
@@ -15,18 +16,25 @@ class CDRVisualizer:
         self.__dict__ = config.__dict__
         self.hive = HiveConnector(config)
         self.hive.initialize(config, data)
-        # self.hive.create_tables(config, data)
+        self.hive.create_tables(config, data)
 
     def calculate_data_statistics(self):
         cursor = self.hive.cursor
+        imei = "count(distinct IMEI) as unique_imei, "
+        imsi = "count(distinct IMSI) as unique_imsi, "
+        for map in self.cdr_data_layer:
+            if str.lower(map['input_name']) == 'imei' and str.lower(map['name']) == 'uid':
+                imei = ''
+            elif str.lower(map['input_name']) == 'imsi' and str.lower(map['name']) == 'uid':
+                imsi = ''
         query = "select count(*) as total_records, " + \
-                "count(distinct from_unixtime(unix_timestamp(call_time ,'yyyyMMdd hh:mm:ss'), 'yyyy-MM-dd')) as total_days, " + \
+                "count(distinct call_time) as total_days, " + \
                 "count(distinct uid) as unique_id, " + \
-                "count(distinct IMEI) as unique_imei, " + \
-                "count(distinct IMSI) as unique_imsi, " + \
+                imei + \
+                imsi + \
                 "count(distinct cell_id) as unique_location_name, " + \
-                "from_unixtime(unix_timestamp(min(call_time) ,'yyyyMMdd hh:mm:ss'), 'yyyy-MM-dd hh:mm:ss') as start_date, " + \
-                "from_unixtime(unix_timestamp(max(call_time) ,'yyyyMMdd hh:mm:ss'), 'yyyy-MM-dd hh:mm:ss')  as end_date " + \
+                "min(call_time) as start_date, " + \
+                "max(call_time)  as end_date " + \
                 "from {provider_prefix}_preprocess ".format(provider_prefix=self.provider_prefix)
 
         print('### Calculating data statistics ###')
@@ -46,52 +54,63 @@ class CDRVisualizer:
         cursor = self.hive.cursor
         results = []
         file_location = '{}/css_file_data_stat.csv'.format(self.csv_location)
-        time = hp.get_time_from_csv(file_location)
-        start_date, end_date = time['start_date'], time['end_date']
 
+        imei = "count(distinct IMEI) as unique_imei, "
+        imsi = "count(distinct IMSI) as unique_imsi, "
+        replicate = False
+        for map in self.cdr_data_layer:
+            if str.lower(map['input_name']) == 'imei' and str.lower(map['name']) == 'uid':
+                imei = ''
+                replicate = True
+            elif str.lower(map['input_name']) == 'imsi' and str.lower(map['name']) == 'uid':
+                imsi = ''
+                replicate = True
+
+        time = hp.get_time_from_csv(file_location, replicate)
+        start_date, end_date = time['start_date'], time['end_date']
         print('### Calculating Daily Statistics ###')
         # FOR CASE ALL
-        query = "SELECT to_date(from_unixtime(unix_timestamp((call_time) ,'yyyyMMdd hh:mm:ss'), 'yyyy-MM-dd hh:mm:ss')) as date, 'ALL' as call_type, 'ALL' as network_type, COUNT(*) as total_records, " + \
-                "COUNT(DISTINCT TO_DATE(from_unixtime(unix_timestamp((call_time) ,'yyyyMMdd hh:mm:ss'), 'yyyy-MM-dd hh:mm:ss'))) as total_days, " + \
+        query = "SELECT to_date(call_time) as date, 'ALL' as call_type, 'ALL' as network_type, COUNT(*) as total_records, " + \
+                "COUNT(DISTINCT TO_DATE(call_time)) as total_days, " + \
                 'COUNT(DISTINCT uid) as unique_id, ' + \
-                'COUNT(DISTINCT imei) as unique_imei, COUNT(DISTINCT imsi) unique_imsi, ' + \
+                imei + imsi + \
                 'COUNT(DISTINCT cell_id) as unique_location_name ' + \
-                "FROM {provider_prefix}_consolidate_data_all where to_date(from_unixtime(unix_timestamp((pdt) ,'yyyyMMdd hh:mm:ss'), 'yyyy-MM-dd hh:mm:ss')) between to_date('{start_date}') and to_date('{end_date}') " \
+                "FROM {provider_prefix}_consolidate_data_all where to_date(pdt) between to_date('{start_date}') and to_date('{end_date}') " \
                     .format(provider_prefix=self.provider_prefix, start_date=start_date, end_date=end_date) + \
-                "GROUP BY to_date(from_unixtime(unix_timestamp((call_time) ,'yyyyMMdd hh:mm:ss'), 'yyyy-MM-dd hh:mm:ss'))"
+                "GROUP BY to_date(call_time)"
 
         query += ' UNION '
 
-        query += "SELECT to_date(from_unixtime(unix_timestamp((call_time) ,'yyyyMMdd hh:mm:ss'), 'yyyy-MM-dd hh:mm:ss')) as date, call_type, 'ALL' as network_type, COUNT(*) as total_records, " + \
-                 "COUNT(DISTINCT TO_DATE(from_unixtime(unix_timestamp((call_time) ,'yyyyMMdd hh:mm:ss'), 'yyyy-MM-dd hh:mm:ss'))) as total_days, " + \
+        query += "SELECT to_date(call_time) as date, call_type, 'ALL' as network_type, COUNT(*) as total_records, " + \
+                 "COUNT(DISTINCT TO_DATE(call_time)) as total_days, " + \
                  'COUNT(DISTINCT uid) as unique_id, ' + \
-                 'COUNT(DISTINCT imei) as unique_imei, COUNT(DISTINCT imsi) unique_imsi, ' + \
+                 imei + imsi + \
                  'COUNT(DISTINCT cell_id) as unique_location_name ' + \
-                 "FROM {provider_prefix}_consolidate_data_all where to_date(from_unixtime(unix_timestamp((pdt) ,'yyyyMMdd hh:mm:ss'), 'yyyy-MM-dd hh:mm:ss')) between to_date('{start_date}') and to_date('{end_date}') " \
+                 "FROM {provider_prefix}_consolidate_data_all where to_date(pdt) between to_date('{start_date}') and to_date('{end_date}') " \
                      .format(provider_prefix=self.provider_prefix, start_date=start_date, end_date=end_date) + \
-                 "GROUP BY to_date(from_unixtime(unix_timestamp((call_time) ,'yyyyMMdd hh:mm:ss'), 'yyyy-MM-dd hh:mm:ss')), call_type"
+                 "GROUP BY to_date(call_time), call_type"
 
         query += ' UNION '
 
-        query += "SELECT to_date(from_unixtime(unix_timestamp((call_time) ,'yyyyMMdd hh:mm:ss'), 'yyyy-MM-dd hh:mm:ss')) as date, 'ALL' as call_type,  network_type, COUNT(*) as total_records, " + \
-                 "COUNT(DISTINCT TO_DATE(from_unixtime(unix_timestamp((call_time) ,'yyyyMMdd hh:mm:ss'), 'yyyy-MM-dd hh:mm:ss'))) as total_days, " + \
+        query += "SELECT to_date(call_time) as date, 'ALL' as call_type,  network_type, COUNT(*) as total_records, " + \
+                 "COUNT(DISTINCT TO_DATE(call_time)) as total_days, " + \
                  'COUNT(DISTINCT uid) as unique_id, ' + \
-                 'COUNT(DISTINCT imei) as unique_imei, COUNT(DISTINCT imsi) unique_imsi, ' + \
+                 imei + imsi + \
                  'COUNT(DISTINCT cell_id) as unique_location_name ' + \
-                 "FROM {provider_prefix}_consolidate_data_all where to_date(from_unixtime(unix_timestamp((pdt) ,'yyyyMMdd hh:mm:ss'), 'yyyy-MM-dd hh:mm:ss')) between to_date('{start_date}') and to_date('{end_date}') " \
+                 "FROM {provider_prefix}_consolidate_data_all where to_date(pdt) between to_date('{start_date}') and to_date('{end_date}') " \
                      .format(provider_prefix=self.provider_prefix, start_date=start_date, end_date=end_date) + \
-                 "GROUP BY to_date(from_unixtime(unix_timestamp((call_time) ,'yyyyMMdd hh:mm:ss'), 'yyyy-MM-dd hh:mm:ss')), network_type"
+                 "GROUP BY to_date(call_time), network_type"
 
         query += ' UNION '
 
-        query += "SELECT to_date(from_unixtime(unix_timestamp((call_time) ,'yyyyMMdd hh:mm:ss'), 'yyyy-MM-dd hh:mm:ss')) as date, call_type, network_type, COUNT(*) as total_records, " + \
-                 "COUNT(DISTINCT TO_DATE(from_unixtime(unix_timestamp((call_time) ,'yyyyMMdd hh:mm:ss'), 'yyyy-MM-dd hh:mm:ss'))) as total_days, " + \
+        query += "SELECT to_date(call_time) as date, call_type, network_type, COUNT(*) as total_records, " + \
+                 "COUNT(DISTINCT TO_DATE(call_time)) as total_days, " + \
                  'COUNT(DISTINCT uid) as unique_id, ' + \
-                 'COUNT(DISTINCT imei) as unique_imei, COUNT(DISTINCT imsi) unique_imsi, ' + \
+                 imei + imsi + \
                  'COUNT(DISTINCT cell_id) as unique_location_name ' + \
-                 "FROM {provider_prefix}_consolidate_data_all where to_date(from_unixtime(unix_timestamp((pdt) ,'yyyyMMdd hh:mm:ss'), 'yyyy-MM-dd hh:mm:ss')) between to_date('{start_date}') and to_date('{end_date}') " \
+                 "FROM {provider_prefix}_consolidate_data_all where to_date(pdt) between to_date('{start_date}') and to_date('{end_date}') " \
                      .format(provider_prefix=self.provider_prefix, start_date=start_date, end_date=end_date) + \
-                 "GROUP BY to_date(from_unixtime(unix_timestamp((call_time) ,'yyyyMMdd hh:mm:ss'), 'yyyy-MM-dd hh:mm:ss')), call_type, network_type ORDER BY date ASC, call_type ASC, network_type DESC"
+                 "GROUP BY to_date(call_time), call_type, network_type ORDER BY date ASC, call_type ASC, network_type DESC"
 
         cursor.execute(query)
         description = cursor.description
@@ -115,52 +134,58 @@ class CDRVisualizer:
         file_location = '{}/css_file_data_stat.csv'.format(self.csv_location)
         time = hp.get_time_from_csv(file_location)
         start_y, start_m, end_y, end_m = time['start_y'], time['start_m'], time['end_y'], time['end_m']
-
+        imei = "count(distinct IMEI) as unique_imei, "
+        imsi = "count(distinct IMSI) as unique_imsi, "
+        for map in self.cdr_data_layer:
+            if str.lower(map['input_name']) == 'imei' and str.lower(map['name']) == 'uid':
+                imei = ''
+            elif str.lower(map['input_name']) == 'imsi' and str.lower(map['name']) == 'uid':
+                imsi = ''
         print('### Calculating Monthly Statistics ###')
         # FOR CASE ALL
-        query = "SELECT YEAR(from_unixtime(unix_timestamp((call_time) ,'yyyyMMdd hh:mm:ss'), 'yyyy-MM-dd hh:mm:ss')) as year, MONTH(from_unixtime(unix_timestamp((call_time) ,'yyyyMMdd hh:mm:ss'), 'yyyy-MM-dd hh:mm:ss')) as month  , 'ALL' as call_type, 'ALL' as network_type, COUNT(*) as total_records, " + \
-                "COUNT(DISTINCT TO_DATE(from_unixtime(unix_timestamp((call_time) ,'yyyyMMdd hh:mm:ss'), 'yyyy-MM-dd hh:mm:ss'))) as total_days, " + \
+        query = "SELECT YEAR(call_time) as year, MONTH(call_time) as month  , 'ALL' as call_type, 'ALL' as network_type, COUNT(*) as total_records, " + \
+                "COUNT(DISTINCT TO_DATE(call_time)) as total_days, " + \
                 'COUNT(DISTINCT uid) as unique_id, ' + \
-                'COUNT(DISTINCT imei) as unique_imei, COUNT(DISTINCT imsi) unique_imsi, ' + \
+                imei + imsi + \
                 'COUNT(DISTINCT cell_id) as unique_location_name ' + \
-                "FROM {provider_prefix}_consolidate_data_all where (year(from_unixtime(unix_timestamp((pdt) ,'yyyyMMdd hh:mm:ss'), 'yyyy-MM-dd hh:mm:ss')) between {start_year} and {end_year}) " \
+                "FROM {provider_prefix}_consolidate_data_all where (year(pdt) between {start_year} and {end_year}) " \
                     .format(provider_prefix=self.provider_prefix, start_year=start_y, end_year=end_y) + \
-                "and (MONTH(from_unixtime(unix_timestamp((pdt) ,'yyyyMMdd hh:mm:ss'), 'yyyy-MM-dd hh:mm:ss')) between {start_month} and {end_month}) GROUP BY YEAR(from_unixtime(unix_timestamp((call_time) ,'yyyyMMdd hh:mm:ss'), 'yyyy-MM-dd hh:mm:ss')), MONTH(from_unixtime(unix_timestamp((call_time) ,'yyyyMMdd hh:mm:ss'), 'yyyy-MM-dd hh:mm:ss'))" \
+                "and (MONTH(pdt) between {start_month} and {end_month}) GROUP BY YEAR(call_time), MONTH(call_time)" \
                     .format(start_month=start_m, end_month=end_m)
 
         query += ' UNION '
 
-        query += "SELECT YEAR(from_unixtime(unix_timestamp((call_time) ,'yyyyMMdd hh:mm:ss'), 'yyyy-MM-dd hh:mm:ss')) as year, MONTH(from_unixtime(unix_timestamp((call_time) ,'yyyyMMdd hh:mm:ss'), 'yyyy-MM-dd hh:mm:ss')) as month, call_type, 'ALL' as network_type, COUNT(*) as total_records, " + \
-                 "COUNT(DISTINCT TO_DATE(from_unixtime(unix_timestamp((call_time) ,'yyyyMMdd hh:mm:ss'), 'yyyy-MM-dd hh:mm:ss'))) as total_days, " + \
+        query += "SELECT YEAR(call_time) as year, MONTH(call_time) as month, call_type, 'ALL' as network_type, COUNT(*) as total_records, " + \
+                 "COUNT(DISTINCT TO_DATE(call_time)) as total_days, " + \
                  'COUNT(DISTINCT uid) as unique_id, ' + \
                  'COUNT(DISTINCT imei) as unique_imei, COUNT(DISTINCT imsi) unique_imsi, ' + \
                  'COUNT(DISTINCT cell_id) as unique_location_name ' + \
-                 "FROM {provider_prefix}_consolidate_data_all where (year(from_unixtime(unix_timestamp((pdt) ,'yyyyMMdd hh:mm:ss'), 'yyyy-MM-dd hh:mm:ss')) between {start_year} and {end_year}) " \
+                 "FROM {provider_prefix}_consolidate_data_all where (year(pdt) between {start_year} and {end_year}) " \
                      .format(provider_prefix=self.provider_prefix, start_year=start_y, end_year=end_y) + \
-                 "and (MONTH(from_unixtime(unix_timestamp((pdt) ,'yyyyMMdd hh:mm:ss'), 'yyyy-MM-dd hh:mm:ss')) between {start_month} and {end_month}) GROUP BY YEAR(from_unixtime(unix_timestamp((call_time) ,'yyyyMMdd hh:mm:ss'), 'yyyy-MM-dd hh:mm:ss')), MONTH(from_unixtime(unix_timestamp((call_time) ,'yyyyMMdd hh:mm:ss'), 'yyyy-MM-dd hh:mm:ss')), call_type" \
+                 "and (MONTH(pdt) between {start_month} and {end_month}) GROUP BY YEAR(call_time), MONTH(call_time), call_type" \
                      .format(start_month=start_m, end_month=end_m)
 
         query += ' UNION '
 
-        query += "SELECT YEAR(from_unixtime(unix_timestamp((call_time) ,'yyyyMMdd hh:mm:ss'), 'yyyy-MM-dd hh:mm:ss')) as year, MONTH(from_unixtime(unix_timestamp((call_time) ,'yyyyMMdd hh:mm:ss'), 'yyyy-MM-dd hh:mm:ss')) as month, 'ALL' as call_type,  network_type, COUNT(*) as total_records, " + \
-                 "COUNT(DISTINCT TO_DATE(from_unixtime(unix_timestamp((call_time) ,'yyyyMMdd hh:mm:ss'), 'yyyy-MM-dd hh:mm:ss'))) as total_days, " + \
+        query += "SELECT YEAR(call_time) as year, MONTH(call_time) as month, 'ALL' as call_type,  network_type, COUNT(*) as total_records, " + \
+                 "COUNT(DISTINCT TO_DATE(call_time)) as total_days, " + \
                  'COUNT(DISTINCT uid) as unique_id, ' + \
-                 'COUNT(DISTINCT imei) as unique_imei, COUNT(DISTINCT imsi) unique_imsi, ' + \
+                 imei + imsi + \
                  'COUNT(DISTINCT cell_id) as unique_location_name ' + \
-                 "FROM {provider_prefix}_consolidate_data_all where (year(from_unixtime(unix_timestamp((pdt) ,'yyyyMMdd hh:mm:ss'), 'yyyy-MM-dd hh:mm:ss')) between {start_year} and {end_year}) " \
+                 "FROM {provider_prefix}_consolidate_data_all where (year(pdt) between {start_year} and {end_year}) " \
                      .format(provider_prefix=self.provider_prefix, start_year=start_y, end_year=end_y) + \
-                 "and (MONTH(from_unixtime(unix_timestamp((pdt) ,'yyyyMMdd hh:mm:ss'), 'yyyy-MM-dd hh:mm:ss')) between {start_month} and {end_month}) GROUP BY YEAR(from_unixtime(unix_timestamp((call_time) ,'yyyyMMdd hh:mm:ss'), 'yyyy-MM-dd hh:mm:ss')), MONTH(from_unixtime(unix_timestamp((call_time) ,'yyyyMMdd hh:mm:ss'), 'yyyy-MM-dd hh:mm:ss')), network_type" \
+                 "and (MONTH(pdt) between {start_month} and {end_month}) GROUP BY YEAR(call_time), MONTH(call_time), network_type" \
                      .format(start_month=start_m, end_month=end_m)
 
         query += ' UNION '
-        query += "SELECT YEAR(from_unixtime(unix_timestamp((call_time) ,'yyyyMMdd hh:mm:ss'), 'yyyy-MM-dd hh:mm:ss')) as year, MONTH(from_unixtime(unix_timestamp((call_time) ,'yyyyMMdd hh:mm:ss'), 'yyyy-MM-dd hh:mm:ss')) as month , call_type, network_type, COUNT(*) as total_records, " + \
-                 "COUNT(DISTINCT TO_DATE(from_unixtime(unix_timestamp((call_time) ,'yyyyMMdd hh:mm:ss'), 'yyyy-MM-dd hh:mm:ss'))) as total_days, " + \
+        query += "SELECT YEAR(call_time) as year, MONTH(call_time) as month , call_type, network_type, COUNT(*) as total_records, " + \
+                 "COUNT(DISTINCT TO_DATE(call_time)) as total_days, " + \
                  'COUNT(DISTINCT uid) as unique_id, ' + \
-                 'COUNT(DISTINCT imei) as unique_imei, COUNT(DISTINCT imsi) unique_imsi, ' + \
+                 imei + imsi + \
                  'COUNT(DISTINCT cell_id) as unique_location_name ' + \
-                 "FROM {provider_prefix}_consolidate_data_all where (year(from_unixtime(unix_timestamp((pdt) ,'yyyyMMdd hh:mm:ss'), 'yyyy-MM-dd hh:mm:ss')) between {start_year} and {end_year}) " \
+                 "FROM {provider_prefix}_consolidate_data_all where (year(pdt) between {start_year} and {end_year}) " \
                      .format(provider_prefix=self.provider_prefix, start_year=start_y, end_year=end_y) + \
-                 "and (MONTH(from_unixtime(unix_timestamp((pdt) ,'yyyyMMdd hh:mm:ss'), 'yyyy-MM-dd hh:mm:ss')) between {start_month} and {end_month}) GROUP BY YEAR(from_unixtime(unix_timestamp((call_time) ,'yyyyMMdd hh:mm:ss'), 'yyyy-MM-dd hh:mm:ss')), MONTH(from_unixtime(unix_timestamp((call_time) ,'yyyyMMdd hh:mm:ss'), 'yyyy-MM-dd hh:mm:ss')), call_type, network_type ".format(
+                 "and (MONTH(pdt) between {start_month} and {end_month}) GROUP BY YEAR(call_time), MONTH(call_time), call_type, network_type ".format(
                      start_month=start_m, end_month=end_m) + \
                  "ORDER BY year ASC, month ASC, call_type ASC, network_type DESC"
 
@@ -193,24 +218,29 @@ class CDRVisualizer:
                     provider_prefix=self.provider_prefix) + \
                 "ON(a1.cell_id = a2.cell_id) group by a1.uid, " + \
                 "concat(a2.latitude, ' : ', a2.longitude) " + \
-                "order by a1.uid, count DESC "
+                "order by a1.uid, count DESC"
 
+        print('QUERYing DONE')
         cursor.execute(query)
+        print(query)
+
         accumulate = 0
         active_id = 0
-        row_i = 1
+        if self.input_file_have_header == 1:
+            row_i = 1
+        else:
+            row_i = 0
         description = cursor.description
+        print(description)
         rows = cursor.fetchall()
+        print('FETCHED!')
         while row_i < len(rows):
             if rows[row_i][0] == active_id:
                 if accumulate < self.frequent_location_percentage:
                     accumulate += rows[row_i][2]
                     row_i += 1
                 else:
-                    if rows[row_i][2] != rows[row_i - 1]:
-                        del rows[row_i]
-                    else:
-                        row_i += 1
+                    del rows[row_i]
             else:
                 accumulate = rows[row_i][2]
                 active_id = rows[row_i][0]
@@ -321,11 +351,13 @@ class CDRVisualizer:
         admin_units_active = []
         geo_jsons_active = []
         name_columns = []
+        geo_json_filename = []
         for col in self.cdr_cell_tower:
             if col['name'] in admin_units:
                 admin_units_active.append(col['name'])
                 geo_jsons_active.append(hp.json_file_to_object(col['geojson_filename'], encoding="utf-8"))
                 name_columns.append(col['geojson_col_name'])
+                geo_json_filename.append(col['geojson_filename'])
         geo_i = 0
         for admin_unit in admin_units_active:
             query = (
@@ -342,6 +374,13 @@ class CDRVisualizer:
             cursor.execute(query)
             description = cursor.description
             rows = cursor.fetchall()
+            # with open('test.csv', "w", newline='') as outfile:
+            #     writer = csv.writer(outfile, quoting=csv.QUOTE_NONNUMERIC)
+            #     writer.writerow(col[0] for col in description)
+            #     for row in rows:
+            #         writer.writerow(row)
+
+
             file_path = '{csv_location}/zone_based_aggregations_level_{level}.csv'.format(csv_location=self.csv_location, level=admin_unit)
             for f in range(0, len(geo_jsons_active[geo_i]['features'])):
 
@@ -357,7 +396,7 @@ class CDRVisualizer:
                 for row in rows:
                     writer.writerow(row)
 
-            with open(col['geojson_filename'][:-4] + '_joined_' + admin_unit + '.json', "w", newline='') as outfile:
+            with open(geo_json_filename[geo_i][:-4] + '_joined_' + admin_unit + '.json', "w", newline='') as outfile:
                 json.dump(geo_jsons_active[geo_i], outfile)
             geo_i += 1
 
@@ -365,12 +404,12 @@ class CDRVisualizer:
         cursor = self.hive.cursor
         query = ("select explode(histogram_numeric(active_days, 10)) as active_day_bins from "
                  "(select count(*) as active_days, td.uid from "
-                 "(select year(to_date(from_unixtime(unix_timestamp(call_time ,'yyyyMMdd hh:mm:ss'), 'yyyy-MM-dd'))) as year, "
-                 "month(to_date(from_unixtime(unix_timestamp(call_time ,'yyyyMMdd hh:mm:ss'), 'yyyy-MM-dd'))) as month, "
-                 "day(to_date(from_unixtime(unix_timestamp(call_time ,'yyyyMMdd hh:mm:ss'), 'yyyy-MM-dd'))) as day, uid "
-                 "from {provider_prefix}_consolidate_data_all group by uid, year(to_date(from_unixtime(unix_timestamp(call_time ,'yyyyMMdd hh:mm:ss'), 'yyyy-MM-dd'))), "
-                 "month(to_date(from_unixtime(unix_timestamp(call_time ,'yyyyMMdd hh:mm:ss'), 'yyyy-MM-dd'))), "
-                 "day(to_date(from_unixtime(unix_timestamp(call_time ,'yyyyMMdd hh:mm:ss'), 'yyyy-MM-dd'))) order by year, month, day, uid) td "
+                 "(select year(to_date(call_time)) as year, "
+                 "month(to_date(call_time)) as month, "
+                 "day(to_date(call_time)) as day, uid "
+                 "from {provider_prefix}_consolidate_data_all group by uid, year(to_date(call_time)), "
+                 "month(to_date(call_time)), "
+                 "day(to_date(call_time)) order by year, month, day, uid) td "
                  "group by td.uid) td2".format(provider_prefix=self.provider_prefix))
 
         cursor.execute(query)
@@ -428,8 +467,8 @@ class CDRVisualizer:
         print('Successfully calculated total unique uids')
 
         print('Calculating total days')
-        q_total_days = " select count(*) as total_days, min(dates) as start_date, max(dates) as end_date from (select  to_date( " \
-                       " call_time) as dates " \
+        q_total_days = " select count(*) as total_days, min(dates) as start_date, max(dates) as end_date from (select  to_date(" \
+                       "call_time) as dates " \
                        "from {provider_prefix}_consolidate_data_all " \
                        "group by to_date(call_time)) td" \
             .format(provider_prefix=self.provider_prefix)
@@ -505,26 +544,27 @@ class CDRVisualizer:
         print('Successfully calculated average daily usage')
         # avg voice call per day
         print('Calculating average daily voice call usage')
-        q_avg_daily_voice = "select count(*)/{total_records} as average_daily_voice from {provider_prefix}_consolidate_data_all where call_type = 'VOICE'".format(
-            provider_prefix=self.provider_prefix, total_records=total_records)
-        cursor.execute(q_avg_daily_voice)
-        des = cursor.description
-        row_avg_daily_voice = cursor.fetchall()
-        row_avg_daily_voice = (des[0][0], row_avg_daily_voice[0][0])
-        print(row_avg_daily_voice)
-        output_2_rows.append(row_avg_daily_voice)
-        print('Successfully calculated average daily voice call usage')
-        # avg sms per day
-        print('Calculating average daily sms usage')
-        q_avg_daily_sms = "select count(*)/{total_records} as average_daily_sms from {provider_prefix}_consolidate_data_all where call_type = 'SMS'".format(
-            provider_prefix=self.provider_prefix, total_records=total_records)
-        cursor.execute(q_avg_daily_sms)
-        des = cursor.description
-        row_avg_daily_sms = cursor.fetchall()
-        row_avg_daily_sms = (des[0][0], row_avg_daily_sms[0][0])
-        print(row_avg_daily_sms)
-        output_2_rows.append(row_avg_daily_sms)
-        print('Successfully calculated average daily sms usage')
+        if False:
+            q_avg_daily_voice = "select count(*)/{total_records} as average_daily_voice from {provider_prefix}_consolidate_data_all where call_type = 'VOICE'".format(
+                provider_prefix=self.provider_prefix, total_records=total_records)
+            cursor.execute(q_avg_daily_voice)
+            des = cursor.description
+            row_avg_daily_voice = cursor.fetchall()
+            row_avg_daily_voice = (des[0][0], row_avg_daily_voice[0][0])
+            print(row_avg_daily_voice)
+            output_2_rows.append(row_avg_daily_voice)
+            print('Successfully calculated average daily voice call usage')
+            # avg sms per day
+            print('Calculating average daily sms usage')
+            q_avg_daily_sms = "select count(*)/{total_records} as average_daily_sms from {provider_prefix}_consolidate_data_all where call_type = 'SMS'".format(
+                provider_prefix=self.provider_prefix, total_records=total_records)
+            cursor.execute(q_avg_daily_sms)
+            des = cursor.description
+            row_avg_daily_sms = cursor.fetchall()
+            row_avg_daily_sms = (des[0][0], row_avg_daily_sms[0][0])
+            print(row_avg_daily_sms)
+            output_2_rows.append(row_avg_daily_sms)
+            print('Successfully calculated average daily sms usage')
         # avg unique cell id
         print('Calculating average daily unique cell id')
         q_avg_daily_unique_cell_id = "select count(*)/{total_records} as average_daily_unique_cell_id from (select distinct cell_id from {provider_prefix}_consolidate_data_all) td" \
@@ -569,9 +609,9 @@ class CDRVisualizer:
 
         print('### Successfully wrote to summary_stats.csv ###')
 
-        q_total_daily_cdr = "select to_date(from_unixtime(unix_timestamp(call_time ,'yyyyMMdd hh:mm:ss'), 'yyyy-MM-dd' )) as date, " \
+        q_total_daily_cdr = "select to_date(call_time) as date, " \
                             "count(*) as total_records from {provider_prefix}_consolidate_data_all group by " \
-                            "to_date(from_unixtime(unix_timestamp(call_time ,'yyyyMMdd hh:mm:ss'), 'yyyy-MM-dd' ))".format(provider_prefix=self.provider_prefix)
+                            "to_date(call_time)".format(provider_prefix=self.provider_prefix)
         cursor.execute(q_total_daily_cdr)
         row_total_daily_cdr = cursor.fetchall()
         total_daily_cdr_x = []
@@ -592,9 +632,9 @@ class CDRVisualizer:
                       des_pair_3={'text_x': 0.58, 'text_y': 1.27, 'text': 'AVG', 'value': f"{daily_cdr_avg:,.2f}"},
                       des_pair_4={'text_x': 0.79, 'text_y': 1.27, 'text': 'Total Records', 'value': f"{total_records:,.2f}"})
 
-        q_total_daily_uid = "select to_date(from_unixtime(unix_timestamp(call_time ,'yyyyMMdd hh:mm:ss'), 'yyyy-MM-dd' )) as date, " \
+        q_total_daily_uid = "select to_date(call_time) as date, " \
                             "count(distinct uid) as total_users from {provider_prefix}_consolidate_data_all group by " \
-                            "to_date(from_unixtime(unix_timestamp(call_time ,'yyyyMMdd hh:mm:ss'), 'yyyy-MM-dd' ))" \
+                            "to_date(call_time)" \
                             .format(provider_prefix=self.provider_prefix)
 
         cursor.execute(q_total_daily_uid)
@@ -621,10 +661,10 @@ class CDRVisualizer:
                       des_pair_4={'text_x': 0.79, 'text_y': 1.27, 'text': 'Total Unique IDs',
                                   'value': f"{total_uids:,.2f}"})
 
-        q_total_daily_locations = "select to_date(from_unixtime(unix_timestamp(call_time ,'yyyyMMdd hh:mm:ss'), 'yyyy-MM-dd' )) as date, " \
+        q_total_daily_locations = "select to_date(call_time) as date, " \
                                   "count(distinct a2.latitude, a2.longitude) as unique_locations from {provider_prefix}_consolidate_data_all a1 " \
                             "join {provider_prefix}_cell_tower_data_preprocess a2 on(a1.cell_id = a2.cell_id) " \
-                            "group by to_date(from_unixtime(unix_timestamp(call_time ,'yyyyMMdd hh:mm:ss'), 'yyyy-MM-dd'))".format(provider_prefix=self.provider_prefix)
+                            "group by to_date(call_time)".format(provider_prefix=self.provider_prefix)
 
         cursor.execute(q_total_daily_locations)
 
@@ -653,9 +693,9 @@ class CDRVisualizer:
                       des_pair_4={'text_x': 0.79, 'text_y': 1.27, 'text': 'Total Unique Locations',
                                   'value': f"{total_unique_locations:,.2f}"})
 
-        q_total_daily_avg_cdr = "select date, total_records/total_uids as daily_average_cdr from(select to_date(from_unixtime(unix_timestamp(call_time ,'yyyyMMdd hh:mm:ss'), 'yyyy-MM-dd' )) as date, " \
+        q_total_daily_avg_cdr = "select date, total_records/total_uids as daily_average_cdr from(select to_date(call_time) as date, " \
                                   "count(distinct uid) as total_uids, count(*) as total_records from {provider_prefix}_consolidate_data_all a1 " \
-                                  "group by to_date(from_unixtime(unix_timestamp(call_time ,'yyyyMMdd hh:mm:ss'), 'yyyy-MM-dd' )))td1".format(
+                                  "group by to_date(call_time))td1".format(
             provider_prefix=self.provider_prefix)
 
         cursor.execute(q_total_daily_avg_cdr)
@@ -679,11 +719,11 @@ class CDRVisualizer:
                                   'value': f"{daily_avg_cdr:,.2f}"})
 
         q_total_daily_avg_locations = "select date, unique_locations/unique_users as daily_avg_locations, unique_cell_ids/unique_users as daily_avg_cell_ids " \
-                                      "from (select to_date(from_unixtime(unix_timestamp(call_time ,'yyyyMMdd hh:mm:ss'), 'yyyy-MM-dd' )) as date, " \
+                                      "from (select to_date(call_time) as date, " \
                                   "count(distinct a2.latitude, a2.longitude)  as unique_locations , count(distinct a1.uid) as unique_users, " \
                                   "count(distinct a1.cell_id) as unique_cell_ids from {provider_prefix}_consolidate_data_all a1 " \
                                   "join {provider_prefix}_cell_tower_data_preprocess a2 on(a1.cell_id = a2.cell_id) " \
-                                  "group by to_date(from_unixtime(unix_timestamp(call_time ,'yyyyMMdd hh:mm:ss'), 'yyyy-MM-dd'))) td1".format(
+                                  "group by to_date(call_time)) td1".format(
             provider_prefix=self.provider_prefix)
 
         cursor.execute(q_total_daily_avg_locations)
@@ -724,7 +764,7 @@ class CDRVisualizer:
         cursor.execute(query)
 
         query = "INSERT OVERWRITE TABLE  la_cdr_all_with_ant_zone_by_uid  PARTITION (pdt)" \
-                "select uid,  CreateTrajectoriesJICAWithZone(uid,call_time,duration,a2.longitude,a2.latitude,a1.cell_id,district_id)" \ 
+                "select uid,  CreateTrajectoriesJICAWithZone(uid,call_time,duration,a2.longitude,a2.latitude,a1.cell_id,district_id)" \
                 "as arr,pdt from la_cdr_all_with_pro_dis a1 JOIN {provider_prefix}_consolidate_data_all a2" \
-                "on(a1.cell_id = a2.cell_id) where from_unixtime(unix_timestamp(pdt ,'yyyyMMdd hh:mm:ss'), 'yyyy-MM-dd')) = " \
+                "on(a1.cell_id = a2.cell_id) where pdt) = " \
                 "'2016-05-01' group by uid, pdt"

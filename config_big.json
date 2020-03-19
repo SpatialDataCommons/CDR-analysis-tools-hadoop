@@ -1,15 +1,20 @@
 {
 	"name":"configuration File for ARPT",
 	"hadoop_data_path":"/disk2/data/Chaichan/",
-	"provider_prefix":"big",
+	"provider_prefix":"big5",
 	"db_name" : "cdrproject",
 
 	"input_header": true,
 	"input_delimiter":",",
-	"input_files" :["ais.csv"],
-	"input_file_time_format": "yyyymmdd",
-	"input_cell_tower_files" : ["cdr_cell_tower.csv"],
+		"input_files" :["2016-03-01.csv","2016-03-03.csv"],
+	"_comment": ["if time format is well formed (like yyyy/mm/dd or dd-mm-yyyy and colons(:) separating time, then leave it blank",
+	"if the time format has no separator then indicate it (ex. yyyyMMdd(can't be automatically recognized) hh:mm:ss)"],
+
+	"input_file_time_format": "",
+	"input_file_have_header": 0,
+	"input_cell_tower_files" : ["mcel_bs_cellid_table.txt"],
 	"input_cell_tower_delimiter":"\t",
+	"input_cell_tower_have_header": 1,
 
 	"check_duplicate": true,
 	"check_invalid_lat_lng": true,
@@ -27,32 +32,29 @@
 	"graph_location": "graphical_reports",
 
 	"cdr_data_layer":[
-		{"input_no":1, "input_name":"SUBID", "data_type":"String",  "output_no":1,   "name":"UID"},
-		{"input_no":-1, "input_name":"IMEI", "data_type":"String",  "output_no":2,   "name":"IMEI"},
-		{"input_no":-1, "input_name":"IMSI", "data_type":"String",  "output_no":3,   "name":"IMSI"},
-		{"input_no":2, "input_name":"CDATE", "data_type":"String",  "output_no":-1,   "name":"CALL_DATE"},
-		{"input_no":3, "input_name":"CTIME", "data_type":"String",  "output_no":4,   "name":"CALL_TIME",  "custom": "CONCAT(CDATE,' ',CTIME)"},
-		{"input_no":4, "input_name":"DURATION", "data_type":"String",  "output_no":5,   "name":"CALL_DURATION"},
-		{"input_no":5, "input_name":"CELLID", "data_type":"String",  "output_no":6,   "name":"CELL_ID"},
-		{"input_no":6, "input_name":"LATITUDE", "data_type":"String",  "output_no":7,   "name":"LATITUDE"},
-		{"input_no":7, "input_name":"LONGITUDE", "data_type":"String",  "output_no":8,   "name":"LONGITUDE"},
-		{"input_no":9, "input_name":"NETWORK_TYPE", "data_type":"String",  "output_no":10,   "name":"NETWORK_TYPE"},
-		{"input_no":8, "input_name":"CALL_TYPE", "data_type":"String",  "output_no":9,   "name":"CALL_TYPE" }
+				{"input_no":1, "input_name":"IMEI", "data_type":"String",  "output_no":1,   "name":"UID"},
+		{"input_no":2, "input_name":"IMSI", "data_type":"String",  "output_no":2,   "name":"IMSI"},
+		{"input_no":3, "input_name":"startTime", "data_type":"String",  "output_no":3,   "name":"CALL_TIME"},
+		{"input_no":4, "input_name":"endTime", "data_type":"String",  "output_no":-1,   "name":"NONE"},
+		{"input_no":5, "input_name":"DURATION", "data_type":"String",  "output_no":4,   "name":"CALL_DURATION"},
+		{"input_no":6, "input_name":"bs_seq", "data_type":"String",  "output_no":-1,   "name":"NONE"},
+		{"input_no":7, "input_name":"CELLID", "data_type":"String",  "output_no":5,   "name":"CELL_ID"},
+		{"input_no":8, "input_name":"call_type", "data_type":"String",  "output_no":6,   "name":"CALL_TYPE"},
+		{"input_no":9, "input_name":"lon", "data_type":"String",  "output_no":-1,   "name":"NONE"},
+		{"input_no":10, "input_name":"lat", "data_type":"String",  "output_no":-1,   "name":"NONE"}
+
  ],
 
 
 
 	"cdr_cell_tower":[
-		{"input_no":1, "input_name":"BTSID", "data_type":"String",  "output_no":1,   "name":"UID"},
-		{"input_no":2, "input_name":"SITE_NAME", "data_type":"String",  "output_no":2,   "name":"SITE_NAME"},
-		{"input_no":3, "input_name":"LONGITUDE", "data_type":"String",  "output_no":3,   "name":"LONGITUDE"},
-		{"input_no":4, "input_name":"LATITUDE", "data_type":"String",  "output_no":4,   "name":"LATITUDE"},
-		{"input_no":5, "input_name":"CELLID", "data_type":"String",  "output_no":5,   "name":"CELL_ID" },
-		{"input_no":6, "input_name":"CELLNAME", "data_type":"String",  "output_no":-1,   "name":"CELLNAME" },
-		{"input_no":7, "input_name":"CI", "data_type":"String",  "output_no":-1,   "name":"CI" },
-		{"input_no":8, "input_name":"AZIMUTH", "data_type":"String",  "output_no":-1,   "name":"AZIMUTH" },
-		{"input_no":9, "input_name":"DISTRICT", "data_type":"String",  "output_no":6,   "name":"ADMIN1", "geojson_filename": "japan.json", "geojson_col_name": "nam"},
-		{"input_no":9, "input_name":"DISTRICT_ID", "data_type":"String",  "output_no":7,   "name":"DISTRICT_ID" }
-	]
+				{"input_no":1, "input_name":"bs_seq", "data_type":"String",  "output_no":-1,   "name":"BS_SEQ"},
+		{"input_no":2, "input_name":"cell_seq", "data_type":"String",  "output_no":1,   "name":"cell_id" },
+		{"input_no":3, "input_name":"name", "data_type":"String",  "output_no":2,   "name":"ADMIN1", "geojson_filename": "japan.json", "geojson_col_name": "nam"},
+		{"input_no":4, "input_name":"lac", "data_type":"String",  "output_no":-1,   "name":"CELLNAME" },
+		{"input_no":5, "input_name":"cell", "data_type":"String",  "output_no":-1,   "name":"CI" },
+		{"input_no":6, "input_name":"lon", "data_type":"String",  "output_no":3,   "name":"longitude" },
+		{"input_no":7, "input_name":"lat", "data_type":"String",  "output_no":4,   "name":"latitude" }
+		]
 
 }

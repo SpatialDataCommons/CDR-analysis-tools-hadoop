@@ -32,7 +32,7 @@ class HiveConnector:
                             .format(provider_prefix=config.provider_prefix) +
                             "({})".format(', '.join(data.arg_cell_raw)) +
                             'ROW FORMAT DELIMITED ' +
-                            "FIELDS TERMINATED BY ',' " +
+                            "FIELDS TERMINATED BY '{field_delimiter}' ".format(field_delimiter=config.input_cell_tower_delimiter) +
                             "LINES TERMINATED BY '\n' " +
                             "STORED AS TEXTFILE " +
                             'tblproperties ("skip.header.line.count"="1")')
@@ -69,7 +69,7 @@ class HiveConnector:
                             .format(provider_prefix=config.provider_prefix) +
                             "({})".format(', '.join(data.arg_cdr_raw)) +
                             'ROW FORMAT DELIMITED ' +
-                            "FIELDS TERMINATED BY ',' " +
+                            "FIELDS TERMINATED BY '{field_delimiter}' ".format(field_delimiter=config.input_delimiter) +
                             "LINES TERMINATED BY '\n' " +
                             "STORED AS TEXTFILE " +
                             'tblproperties ("skip.header.line.count"="1")')
@@ -157,4 +157,5 @@ class HiveConnector:
                        "PARTITION (pdt) select {}, ".format(', '.join(data.arg_cdr_con)) + \
                        "(call_time) as pdt " + \
                        "from {provider_prefix}_preprocess".format(provider_prefix=config.provider_prefix)
+        print(insert_query)
         self.cursor.execute(insert_query)

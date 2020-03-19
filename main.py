@@ -23,8 +23,8 @@ def main():
 
     # user section here
     vs.calculate_data_statistics()
-    vs.calculate_daily_statistic()
-    vs.calculate_monthly_statistic()
+    # vs.calculate_daily_statistic()
+    # vs.calculate_monthly_statistic()
     vs.calculate_frequent_locations()
     vs.calculate_zone_population()
     vs.calculate_user_date_histogram()
