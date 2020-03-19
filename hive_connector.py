@@ -146,11 +146,7 @@ class HiveConnector:
                        "({})".format(' ,'.join(data.arg_cdr_prep)) + \
                        "PARTITIONED BY (pdt string) " + \
                        "ROW FORMAT DELIMITED " + \
-<<<<<<< HEAD
                        "FIELDS TERMINATED BY ','" + \
-=======
-                       "FIELDS TERMINATED BY '{field_delimiter}' ".format(field_delimiter=config.input_delimiter) + \
->>>>>>> parent of 77b2c27... added big_csv
                        "LINES TERMINATED BY '\n'" + \
                        'STORED AS SEQUENCEFILE'
         self.cursor.execute(create_query)
@@ -159,12 +155,6 @@ class HiveConnector:
         insert_query = "INSERT INTO TABLE  {provider_prefix}_consolidate_data_all ".format(
             provider_prefix=config.provider_prefix) + \
                        "PARTITION (pdt) select {}, ".format(', '.join(data.arg_cdr_con)) + \
-<<<<<<< HEAD
                        "(call_time) as pdt " + \
-=======
-                       "from_unixtime(unix_timestamp(call_time ,'{time_format}'), 'yyyy-MM-dd hh:mm:ss') as pdt "\
-                        .format(time_format=config.input_file_time_format) \
-                       .format(time_format=config.input_file_time_format) + \
->>>>>>> parent of 77b2c27... added big_csv
                        "from {provider_prefix}_preprocess".format(provider_prefix=config.provider_prefix)
         self.cursor.execute(insert_query)

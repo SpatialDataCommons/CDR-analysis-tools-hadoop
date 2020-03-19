@@ -22,16 +22,6 @@ def main():
     vs = CDRVisualizer(config, cdr_data)
 
     # user section here
-<<<<<<< HEAD
-    # vs.calculate_data_statistics()
-    # vs.calculate_daily_statistic()
-    # vs.calculate_monthly_statistic()
-    # vs.calculate_frequent_locations()
-    # vs.calculate_zone_population()
-    # vs.calculate_user_date_histogram()
-    # vs.calculate_summary()
-    vs.calculate_od()
-=======
     vs.calculate_data_statistics()
     vs.calculate_daily_statistic()
     vs.calculate_monthly_statistic()
@@ -40,7 +30,6 @@ def main():
     vs.calculate_user_date_histogram()
     vs.calculate_summary()
     # vs.calculate_od()
->>>>>>> parent of 77b2c27... added big_csv
 
 
 
