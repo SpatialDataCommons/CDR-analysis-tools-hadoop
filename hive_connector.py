@@ -36,7 +36,7 @@ class HiveConnector:
                             "LINES TERMINATED BY '\n' " +
                             "STORED AS TEXTFILE " +
                             'tblproperties ("skip.header.line.count"="1")')
-        print('DONE')
+
         # TODO string delimiter double quote is not checked yet (ask Ajarn.May)
         if len(config.input_cell_tower_files) < 1:
             print('Please check the input_cell_tower_files field in config.json and make sure the file is valid.')
@@ -150,6 +150,7 @@ class HiveConnector:
                        "LINES TERMINATED BY '\n'" + \
                        'STORED AS SEQUENCEFILE'
         self.cursor.execute(create_query)
+        print(data.arg_cdr_con)
         print('### Inserting into the consolidate table ###')
         insert_query = "INSERT INTO TABLE  {provider_prefix}_consolidate_data_all ".format(
             provider_prefix=config.provider_prefix) + \

@@ -429,9 +429,9 @@ class CDRVisualizer:
 
         print('Calculating total days')
         q_total_days = " select count(*) as total_days, min(dates) as start_date, max(dates) as end_date from (select  to_date( " \
-                       " from_unixtime( unix_timestamp(call_time ,'yyyyMMdd hh:mm:ss'), 'yyyy-MM-dd' )) as dates " \
+                       " call_time) as dates " \
                        "from {provider_prefix}_consolidate_data_all " \
-                       "group by to_date(from_unixtime(unix_timestamp(call_time ,'yyyyMMdd hh:mm:ss'), 'yyyy-MM-dd' ))) td" \
+                       "group by to_date(call_time)) td" \
             .format(provider_prefix=self.provider_prefix)
 
         cursor.execute(q_total_days)
