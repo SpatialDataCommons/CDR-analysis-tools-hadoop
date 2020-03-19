@@ -6,27 +6,8 @@ This repository will be incrementally updated from time to time. Kindly visit th
 
 # Data preparation
 
-The user needs 2 files for the tool, a cdr file and a location mapping file. Both of them come with different column names and formats. To process CDR data, the data needs to be in the format that is compatible with the tools. The mapping json file maps from your prepared raw csv files to Hive tables ready for the processing and a mapping scheme for each file has to be done by the user. 
-
-## a CSV file for CDR records
-To analyse the CDR data, the user needs to provide the tools with a CDR file in the csv format. It needs to contain
-1. IMEI or IMSEI 
-2. Call start time
-3. Cell ID
-4. Call Type
-
-### Mapping
-
-## a CSV location mapping file for administration units
-The previous csv file will be joined with this cell id file to calculate zone-based statistics. It should supply
-1. Cell ID (will be joined with the Cell ID in the CDR record file)
-2. At least one Administration Unit (ex. province or district) name
-3. Latitude
-4. Longitude
-
-### Mapping
-
-
+# Mapping Data
+To process CDR data, raw data needs to be in the format that is compatible with the tools. The mapping data maps from your prepared raw csv files to Hive tables ready for the processing.
 
 # Prerequisites
   * Hadoop server with Hive installed
