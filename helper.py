@@ -121,7 +121,10 @@ def extract_mapping_data(config, data):
         for argument in mappings[i]:
             if argument['output_no'] != -1:
                 arguments_prep.append(argument['name'] + ' ' + argument['data_type'])
-                arguments_con.append(argument['name'])
+                if str.lower(argument['name']) == 'call_time':
+                    arguments_con.append("from_unixtime(unix_timestamp(call_time ,'{time_format}'), 'yyyy-MM-dd hh:mm:ss') as call_time".format(time_format=config.input_file_time_format))
+                else:
+                    arguments_con.append(argument['name'])
                 if argument['input_no'] != -1:
                     arguments_raw.append(argument['input_name'] + ' ' + argument['data_type'])
 

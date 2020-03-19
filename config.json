@@ -7,11 +7,17 @@
 	"input_header": true,
 	"input_delimiter":",",
 	"input_files" :["ais.csv"],
+<<<<<<< HEAD
 
 	"input_file_time_format": "yyyyMMdd hh:mm:ss",
 	"input_cell_tower_files" : ["cdr_cell_tower.csv"],
 	"input_cell_tower_delimiter":",",
 
+=======
+	"input_file_time_format": "yyyyMMdd hh:mm:ss",
+	"input_cell_tower_files" : ["cdr_cell_tower.csv"],
+	"input_cell_tower_delimiter":",",
+>>>>>>> parent of 77b2c27... added big_csv
 
 	"check_duplicate": true,
 	"check_invalid_lat_lng": true,
