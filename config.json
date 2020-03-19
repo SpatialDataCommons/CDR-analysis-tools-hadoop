@@ -7,9 +7,8 @@
 	"input_header": true,
 	"input_delimiter":",",
 	"input_files" :["ais.csv"],
-	"input_file_time_format": "yyyyMMdd hh:mm:ss",
+	"input_file_time_format": "yyyymmdd",
 	"input_cell_tower_files" : ["cdr_cell_tower.csv"],
-	"input_cell_tower_delimiter":",",
 
 	"check_duplicate": true,
 	"check_invalid_lat_lng": true,
@@ -51,7 +50,7 @@
 		{"input_no":7, "input_name":"CI", "data_type":"String",  "output_no":-1,   "name":"CI" },
 		{"input_no":8, "input_name":"AZIMUTH", "data_type":"String",  "output_no":-1,   "name":"AZIMUTH" },
 		{"input_no":9, "input_name":"DISTRICT", "data_type":"String",  "output_no":6,   "name":"ADMIN1", "geojson_filename": "japan.json", "geojson_col_name": "nam"},
-		{"input_no":-1, "input_name":"DISTRICT_ID", "data_type":"String",  "output_no":-1,   "name":"DISTRICT_ID" }
+		{"input_no":9, "input_name":"DISTRICT_ID", "data_type":"String",  "output_no":7,   "name":"DISTRICT_ID" }
 	]
 
 }
