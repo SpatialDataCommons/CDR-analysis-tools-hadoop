@@ -7,11 +7,9 @@
 	"input_header": true,
 	"input_delimiter":",",
 	"input_files" :["ais.csv"],
-	"input_file_have_header": 1,
-	"input_file_time_format": "MM/dd/yyyy hh:mm:ss",
+	"input_file_time_format": "yyyyMMdd hh:mm:ss",
 	"input_cell_tower_files" : ["cdr_cell_tower.csv"],
 	"input_cell_tower_delimiter":",",
-	"input_cell_tower_have_header": 1,
 
 	"check_duplicate": true,
 	"check_invalid_lat_lng": true,
