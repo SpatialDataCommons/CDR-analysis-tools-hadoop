@@ -4,10 +4,39 @@ Like the standalone version, this repository is a set of tools written in Python
 
 This repository will be incrementally updated from time to time. Kindly visit the repository and have a look at this file. 
 
-# Data preparation
+## Getting Started
+
+These instructions will get you a copy of the software package and running on your local machine. It can be run on both Windows and Linux. The tool dependencies are in the requirements.txt file so that the user can install all of them in just 1 command.
+
+Structure this package
+
+```
+├─Statistics Report:
+│       Generating csv reports and graph reports including
+|	  - summary statistics (average usage, voice call and etc.)
+│	  - whole data statistics (ex. total cdrs, total days and locations)
+|	  - daily and monthly statistics of users
+|	  - frequent locations
+|	  - zone based aggregation
+|	  - graphical daily data
+|	  - usage histogram
+├─Origin-Destination (OD):
+│       Generating Origin-Destination file indicating the movement of humans
+│
+├─Interpolation:
+|       A set of software for route interpolation including 
+|         - Extracting stay points
+|         - Extract tripsegment
+|         - Relocation PoI
+|         - Route Interpolation with transpotation network
+```
+
+
+
+## Data preparation
 The user needs 2 files for the tool, a cdr file and a location mapping file. Both of them come with different column names and formats. To process CDR data, the data needs to be in the format that is compatible with the tools. The mapping json file maps from your prepared raw csv files to Hive tables ready for the processing and a mapping scheme for each file has to be done by the user. 
 
-## a CSV file for CDR records
+### a CSV file for CDR records
 To analyse the CDR data, the user needs to provide the tools with a CDR file in the csv format. It needs to contain
 1. IMEI or IMSEI 
 2. Call start time
@@ -15,7 +44,7 @@ To analyse the CDR data, the user needs to provide the tools with a CDR file in 
 4. Call Type (2G, 3G, 4G)
 5. Network Type (VOICE, DATA, SMS)
 
-### Mapping
+#### Mapping
 Given a CDR file, the mapping in the key "cdr_data_layer" in the file config.json is shown below
 
 ```
@@ -33,14 +62,14 @@ Given a CDR file, the mapping in the key "cdr_data_layer" in the file config.jso
 In the mapping data, non-negative "input_no" and "output_no" together mean direct mapping. For example, "DURATION" will be mapped to "CALL_DURATION" in "input_no" 4. The input zone ("input_no", "input_name") is from your raw table and the output zone ("output_no", "name") is the target column name in the preprocessed tables. Value -1 in the input_no or output_no means there is no column in the particular raw table or preprocessed table. 
 Value -1 in the "output_no" means it is not going to be put in the preprocessed table as a column and name will be ignored but the "input_no" in the same object can be non-negative to indicate that the "input_name" field will be a column in the raw table. The user needs to supply all the raw input columns to the mapping file. the custom field means there can be a special function applied to one or more than one fields. the "CALL_TIME" column in the preprocessed table will be the concatenation of the CDATE and CTIME columns of the raw table.     
 
-## a CSV location mapping file for administration units
+### a CSV location mapping file for administration units
 The previous csv file will be joined with this cell id file to calculate zone-based statistics. It should supply
 1. Cell ID (will be joined with the Cell ID in the CDR record file)
 2. At least one Administration Unit (ex. province or district) name
 3. Latitude
 4. Longitude
 
-### Mapping
+#### Mapping
 The mapping in this file needs to be done in the same way as previously mentioned in the CDR raw file.
 
 ```
@@ -61,40 +90,50 @@ The mapping in this file needs to be done in the same way as previously mentione
 One difference is that you need to supply at least one administration unit or your interested location to calculate zone population. For examplle, in the "input_no" 9, it contains district and is mapped to "ADMIN1" (administration unit 1). It needs to be in the format ADMIN[0-5] to make the tool work (you may need to have shoppnig complex names in "input_name" and name it "ADMIN0" for example).
 If you want to visualize, put your geojson file location in the "geojson_filename" and the data will be joined with the zone population data and can be visualized in https://kepler.gl
 
-# Configuration
+## Configuration
 In config.json file, you need to assign the right path, prefix, location and so on. Here is an example of a config.json file with an explanation 
 
 
 "hadoop_data_path":"/path/to/cdr/and/celltower/file",
+
 "provider_prefix":"pref1" **any prefix you'd like to name (you may need in case that you want to use this tool to different data** 
+
 "db_name" : "cdrproject", 
 
 "input_delimiter":",", **raw file delimiter (ex. comma "," or tab "\t")**
+
 "input_files" :["cdr.csv"], ** raw cdr file(s)**
+
 "input_file_time_format": "yyyyMMdd hh:mm:ss", **time format in your data (if it is ambiguous ex. no separator between month and year, you need to put the format here or left it blank if it is dash, slash-separated date and colon-separated time**
+
 "input_file_have_header": 1, **if having table description (column names) put 1, otherwise 0**
 
 "input_cell_tower_files" : ["cdr_cell_tower.csv"], **cell tower mapping data**
+
 "input_cell_tower_delimiter":",", 
+
 "input_cell_tower_have_header": 1,
 
 "check_duplicate": true, **filter duplicate rows or not**
+
 "check_invalid_lat_lng": true, **filter invalid lat and lng**
 
-"host": "hadoopmaster.apichon.com", **hostname of the hadoop server"
+"host": "hadoopmaster.apichon.com", **hostname of the hadoop server**
+
 "port": 10000, **hive2 server port**
 
 "frequent_location_percentage": 80, **sum of the frequent location of a particular uid**
 
 "csv_location": "csv_reports", **directory of the output csv reports**
+
 "graph_location": "graphical_reports", **directory of the graph reports**
 
 
-# Prerequisites
+## Prerequisites
   * Hadoop server with Hive installed
   * Python 3 or above 
   * Python pip3 (a Python package installer)
   
-# Installation
+## Installation
 install all requirement packages in requirements.txt using command 
   * pip install -r requirements.txt
