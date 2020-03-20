@@ -20,6 +20,7 @@ Structure this package
 |	  - zone based aggregation
 |	  - graphical daily data
 |	  - usage histogram
+|
 ├─Origin-Destination (OD):
 │       Generating Origin-Destination file indicating the movement of humans
 │
@@ -128,7 +129,6 @@ In config.json file, you need to assign the right path, prefix, location and so 
 
 "graph_location": "graphical_reports", **directory of the graph reports**
 
-
 ## Prerequisites
   * Hadoop server with Hive installed
   * Python 3 or above 
@@ -137,3 +137,6 @@ In config.json file, you need to assign the right path, prefix, location and so 
 ## Installation
 install all requirement packages in requirements.txt using command 
   * pip install -r requirements.txt
+
+## License
+Free to use and distribute with acknowledgement.
