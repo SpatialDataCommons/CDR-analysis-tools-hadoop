@@ -1,5 +1,5 @@
 from impala.dbapi import connect
-from helper import json_file_to_object
+from helper import json_file_to_object, get_admin_units_from_mapping
 import os
 
 
@@ -9,7 +9,7 @@ class HiveConnector:
         self.conn = connect(config.host, config.port, user='rsstudent', auth_mechanism='PLAIN')
         self.cursor = self.conn.cursor()
 
-    def initialize(self, config, data):
+    def initialize(self, config):
         for command in json_file_to_object('initial_hive_commands.json')['hive_commands']:
             self.cursor.execute(command)
         if not os.path.exists(config.csv_location):
@@ -20,9 +20,22 @@ class HiveConnector:
     def create_tables(self, config, data):
         self.import_cell_tower_data_raw(config, data)
         self.preprocess_cell_tower_data(config, data)
+
+        admins = get_admin_units_from_mapping(config.cdr_cell_tower)
+
+        for admin in admins:
+            self.cell_tower_data_admin(config, admin)
+
         self.import_raw(config, data)
         self.preprocess_data(config, data)
         self.consolidate_table(config, data)
+        self.frequent_location(config)
+        self.rank1_frequent_location(config)
+        # pass
+        # self.cdr_by_uid(config)
+        # self.create_od(config)
+        # self.create_od_detail()
+        # self.create_od_sum()
 
     def import_cell_tower_data_raw(self, config, data):
         self.cursor.execute('DROP TABLE IF EXISTS {provider_prefix}_cell_tower_data_raw'
@@ -72,7 +85,8 @@ class HiveConnector:
                             "FIELDS TERMINATED BY '{field_delimiter}' ".format(field_delimiter=config.input_delimiter) +
                             "LINES TERMINATED BY '\n' " +
                             "STORED AS TEXTFILE " +
-                            'tblproperties ("skip.header.line.count"="1")')
+                            'tblproperties ("skip.header.line.count"="{cell_tower_header}")'
+                            .format(cell_tower_header=config.input_cell_tower_have_header))
 
         if len(config.input_files) < 1:
             'Please check the input_files field in config.json and make sure the file is valid.'
@@ -96,7 +110,38 @@ class HiveConnector:
                     "into table {provider_prefix}_raw".format(provider_prefix=config.provider_prefix)
                 )
 
+    def cell_tower_data_admin(self, config, admin):
+        if config.check_invalid_lat_lng:
+            check_lat_lng = 'and (latitude != 0 or longitude != 0) and latitude is not NULL and longitude is not NULL'
+        else:
+            check_lat_lng = ''
+
+
+        self.cursor.execute('DROP TABLE IF EXISTS {provider_prefix}_cell_tower_data_{admin}'.format(
+            provider_prefix=config.provider_prefix, admin=admin))
+        self.cursor.execute('CREATE TABLE IF NOT EXISTS {provider_prefix}_cell_tower_data_{admin} '.format(
+            provider_prefix=config.provider_prefix, admin=admin) +
+                            "({admin}_id string, {admin}_name string, latitude string, longitude string)".format(admin=admin) +
+                            'ROW FORMAT DELIMITED ' +
+                            "FIELDS TERMINATED BY ',' " +
+                            "LINES TERMINATED BY '\n' " +
+                            'STORED AS SEQUENCEFILE')
+
+        print('### Inserting into cell tower data {} table ###'.format(admin))
+        insert_query = "INSERT OVERWRITE TABLE  {provider_prefix}_cell_tower_data_{admin} " \
+                            "select row_number() OVER () - 1 as rowidx, {admin}, latitude, longitude  " \
+                            "from {provider_prefix}_cell_tower_data_preprocess where translate({admin},'  ',' ') != '' " \
+                            "{check_lat_lng} " \
+                            "group by {admin}, latitude, longitude order by rowidx" \
+                            .format(provider_prefix=config.provider_prefix, admin=admin, check_lat_lng=check_lat_lng)
+        self.cursor.execute(insert_query)
+
     def preprocess_cell_tower_data(self, config, data):
+        if config.check_duplicate:
+            distinct = 'distinct'
+        else:
+            distinct = ''
+
         self.cursor.execute('DROP TABLE IF EXISTS {provider_prefix}_cell_tower_data_preprocess'.format(
             provider_prefix=config.provider_prefix))
         self.cursor.execute('CREATE TABLE IF NOT EXISTS {provider_prefix}_cell_tower_data_preprocess'.format(
@@ -107,35 +152,37 @@ class HiveConnector:
                             "LINES TERMINATED BY '\n' " +
                             'STORED AS SEQUENCEFILE')
 
-        # delete_query = "delete from {provider_prefix}_cell_tower_data_preprocess".format(
-        #     provider_prefix=self.provider_prefix)
-        # self.cursor.execute(delete_query)
         # need username to get privilege
         print('### Inserting into cell tower data preprocessing table ###')
         self.cursor.execute("INSERT INTO TABLE  {provider_prefix}_cell_tower_data_preprocess "
                             .format(provider_prefix=config.provider_prefix) +
-                            "select {} ".format(', '.join(data.arg_cell_map)) +
+                            "select {distinct} {arg} ".format(distinct=distinct, arg=', '.join(data.arg_cell_map)) +
                             "from {provider_prefix}_cell_tower_data_raw"
                             .format(provider_prefix=config.provider_prefix))
 
     def preprocess_data(self, config, data):
+        if config.check_duplicate:
+            distinct = 'distinct'
+        else:
+            distinct = ''
+
         print('### Creating preprocessing table if not existing ###')
         self.cursor.execute('DROP TABLE IF EXISTS {provider_prefix}_preprocess'.format(provider_prefix=config.provider_prefix))
-        self.cursor.execute(
-            'CREATE TABLE {provider_prefix}_preprocess'.format(provider_prefix=config.provider_prefix) +
-            "({})".format(', '.join(data.arg_cdr_prep)) +
-            'ROW FORMAT DELIMITED ' +
-            "FIELDS TERMINATED BY ',' " +
-            "LINES TERMINATED BY '\n' " +
-            "STORED AS SEQUENCEFILE")
+        create_q = 'CREATE TABLE {provider_prefix}_preprocess' \
+                    "({args}) ROW FORMAT DELIMITED "\
+                    "FIELDS TERMINATED BY ',' " \
+                    "LINES TERMINATED BY '\n' " \
+                    "STORED AS SEQUENCEFILE".format(args=', '.join(data.arg_cdr_prep), provider_prefix=config.provider_prefix)
+        print(create_q)
+        self.cursor.execute(create_q)
 
         # need username to get privilege
         print('### Inserting into preprocessing  table ###')
-        self.cursor.execute("INSERT OVERWRITE TABLE  {provider_prefix}_preprocess "
-                            .format(provider_prefix=config.provider_prefix) +
-                            "select {} ".format(', '.join(data.arg_cdr_map)) +
-                            "from {provider_prefix}_raw"
-                            .format(provider_prefix=config.provider_prefix))
+        insert_q = "INSERT OVERWRITE TABLE  {provider_prefix}_preprocess " \
+                   "select {distinct} {arg} from {provider_prefix}_raw "\
+            .format(distinct=distinct, arg=', '.join(data.arg_cdr_map), provider_prefix=config.provider_prefix)
+        print(insert_q)
+        self.cursor.execute(insert_q)
 
     def consolidate_table(self, config, data):
         self.cursor.execute('DROP TABLE IF EXISTS {provider_prefix}_consolidate_data_all'.format(
@@ -149,13 +196,147 @@ class HiveConnector:
                        "FIELDS TERMINATED BY ','" + \
                        "LINES TERMINATED BY '\n'" + \
                        'STORED AS SEQUENCEFILE'
+
         self.cursor.execute(create_query)
         print(data.arg_cdr_con)
         print('### Inserting into the consolidate table ###')
         insert_query = "INSERT INTO TABLE  {provider_prefix}_consolidate_data_all ".format(
             provider_prefix=config.provider_prefix) + \
                        "PARTITION (pdt) select {}, ".format(', '.join(data.arg_cdr_con)) + \
-                       "(call_time) as pdt " + \
+                       "to_date(call_time) as pdt " + \
                        "from {provider_prefix}_preprocess".format(provider_prefix=config.provider_prefix)
         print(insert_query)
         self.cursor.execute(insert_query)
+
+    def frequent_location(self, config):
+        admin = config.od_admin_unit
+
+        self.cursor.execute('DROP TABLE IF EXISTS {provider_prefix}_frequent_location'.format(provider_prefix=config.provider_prefix))
+        query = "CREATE TABLE {provider_prefix}_frequent_location  (uid string, cell_id string,tcount int,trank int,ppercent double, " \
+                "LONGITUDE string, LATITUDE string, {admin_params}) " \
+                "ROW FORMAT DELIMITED FIELDS TERMINATED BY '\t' COLLECTION ITEMS TERMINATED BY ',' " \
+                "MAP KEYS TERMINATED BY '!' LINES TERMINATED BY '\n' STORED AS SEQUENCEFILE" \
+            .format(provider_prefix=config.provider_prefix, admin_params=admin + '_id string')
+
+        self.cursor.execute(query)
+
+        query = "INSERT INTO TABLE {provider_prefix}_frequent_location SELECT a1.uid, a2.cell_id, " \
+                "count(a1.uid) as tcount, ROW_NUMBER() OVER(PARTITION BY a1.uid order by count(a1.uid) DESC) as rank, " \
+                "count(a1.uid)/SUM(count(a1.uid)) OVER(partition by a1.uid) * 100 as percentage " \
+                ", a2.longitude, a2.latitude, a3.{admin_params} from {provider_prefix}_consolidate_data_all a1 " \
+                "JOIN {provider_prefix}_cell_tower_data_preprocess a2  ON(a1.cell_id = a2.cell_id) " \
+                "JOIN {provider_prefix}_cell_tower_data_{admin} a3 on(a2.latitude = a3.latitude and a2.longitude = a3.longitude) " \
+                "group by a1.uid, a2.latitude,  a2.longitude , a2.cell_id, a3.{admin_params} " \
+                "order by a1.uid, rank ASC " \
+                .format(provider_prefix=config.provider_prefix, admin_params=admin + '_id', admin=admin)
+
+        self.cursor.execute(query)
+
+    def rank1_frequent_location(self, config):
+        admin = config.od_admin_unit
+        create_param = admin + '_id string'
+
+        self.cursor.execute('DROP TABLE IF EXISTS {provider_prefix}_la_cdr_uid_home'.format(provider_prefix=config.provider_prefix))
+        query = "CREATE TABLE {provider_prefix}_la_cdr_uid_home  (uid string, cell_id string, tcount " \
+                "int, trank int, ppercent double, LONGITUDE string, LATITUDE string, {admin_params}) " \
+                "ROW FORMAT DELIMITED FIELDS TERMINATED BY '\t' COLLECTION ITEMS TERMINATED BY ',' " \
+                "MAP KEYS TERMINATED BY '!' LINES TERMINATED BY '\n' STORED AS SEQUENCEFILE " \
+            .format(provider_prefix=config.provider_prefix, admin_params=create_param)
+        self.cursor.execute(query)
+        print('inserting')
+        insert_q = "INSERT OVERWRITE TABLE  {provider_prefix}_la_cdr_uid_home  " \
+                    "SELECT * FROM {provider_prefix}_frequent_location where trank = 1" \
+                    .format(provider_prefix=config.provider_prefix)
+
+        self.cursor.execute(insert_q)
+        print('Done')
+
+    def cdr_by_uid(self, config):
+        self.cursor.execute('DROP TABLE IF EXISTS la_cdr_all_with_ant_zone_by_uid')
+        query = "CREATE TABLE la_cdr_all_with_ant_zone_by_uid(uid string, arr ARRAY < ARRAY < string >>) PARTITIONED " \
+                "BY(pdt string) ROW FORMAT DELIMITED FIELDS TERMINATED BY '\t' COLLECTION ITEMS TERMINATED BY ',' " \
+                "MAP KEYS TERMINATED BY '!' LINES TERMINATED BY '\n' STORED AS SEQUENCEFILE"
+        self.cursor.execute(query)
+        print('inserting')
+        insert_q = "INSERT OVERWRITE TABLE  la_cdr_all_with_ant_zone_by_uid  PARTITION (pdt)" \
+                    "select a1.uid, CreateTrajectoriesJICAWithZone" \
+                    "(a1.uid, call_time, call_duration, a2.longitude, a2.latitude, a1.cell_id, a2.admin1) as arr, pdt " \
+                    "from {provider_prefix}_consolidate_data_all a1 join {provider_prefix}_cell_tower_data_preprocess a2 " \
+                    "on (a1.cell_id = a2.cell_id) where to_date(pdt) = '2016-05-01' " \
+                    "group by a1.uid, pdt " \
+                    .format(provider_prefix=config.provider_prefix)
+
+        self.cursor.execute(insert_q)
+        print('Done')
+
+    def create_od(self, config):
+        self.cursor.execute('DROP TABLE IF EXISTS {provider_prefix}_la_cdr_all_with_ant_zone_by_uid_od'
+                            .format(provider_prefix=config.provider_prefix))
+        create_q = "CREATE TABLE la_cdr_all_with_ant_zone_by_uid_od" \
+                    "(uid string,home_cell_id string,home_zone string, arr ARRAY<ARRAY<string>>)" \
+                    "PARTITIONED BY (pdt string) ROW FORMAT DELIMITED FIELDS TERMINATED BY '\t'" \
+                    "COLLECTION ITEMS TERMINATED BY ',' MAP KEYS TERMINATED BY '!'" \
+                    "LINES TERMINATED BY '\n' STORED AS SEQUENCEFILE"
+        print('creating')
+        self.cursor.execute(create_q)
+
+        insert_q = "INSERT OVERWRITE TABLE {provider_prefix}_la_cdr_all_with_ant_zone_by_uid_od PARTITION (pdt) " \
+                    "select t1.uid,t2.cell_id as home_cell_id, t2.{target_unit}_id as home_zone, " \
+                    "TripOD(arr, t1.uid, t2.cell_id, t2.{target_unit}_id, t2.LONGITUDE, t2.LATITUDE), pdt " \
+                    "from la_cdr_all_with_ant_zone_by_uid t1 inner join " \
+                    "la_cdr_uid_home t2 on t1.uid = t2.uid" \
+                    .format(provider_prefix=config.provider_prefix, target_unit=config.od_admin_unit)
+
+        print('inserting')
+        self.cursor.execute(insert_q)
+        print('done')
+
+
+    def create_od_detail(self):
+
+        self.cursor.execute('DROP TABLE IF EXISTS la_cdr_all_with_ant_zone_by_uid_od_detail ')
+        create_q = "CREATE TABLE la_cdr_all_with_ant_zone_by_uid_od_detail " \
+                   "(uid string,home_cell_id string,home_zone string, arr ARRAY<string>)" \
+                    "PARTITIONED BY (pdt string) ROW FORMAT DELIMITED FIELDS TERMINATED BY '\t'" \
+                    "COLLECTION ITEMS TERMINATED BY ',' MAP KEYS TERMINATED BY '!'" \
+                    "LINES TERMINATED BY '\n' STORED AS SEQUENCEFILE"
+        print('creating')
+        self.cursor.execute(create_q)
+
+        insert_q = "INSERT OVERWRITE TABLE  la_cdr_all_with_ant_zone_by_uid_od_detail PARTITION (pdt) " \
+                    "select uid ,home_cell_id,home_zone,m as arr,pdt " \
+                    "from la_cdr_all_with_ant_zone_by_uid_od t1 LATERAL VIEW explode(t1.arr) myTable1 AS m"
+
+        print('inserting')
+        self.cursor.execute(insert_q)
+        print('done')
+
+    def create_od_sum(self):
+        # self.cursor.execute('DROP TABLE IF EXISTS la_cdr_all_with_ant_zone_by_uid_od_sum ')
+        # create_q = "CREATE TABLE la_cdr_all_with_ant_zone_by_uid_od_sum " \
+        #            "(origin string,destination string,tcount double, tusercount double)" \
+        #            "PARTITIONED BY (pdt string) ROW FORMAT DELIMITED FIELDS TERMINATED BY '\t'" \
+        #            "COLLECTION ITEMS TERMINATED BY ',' MAP KEYS TERMINATED BY '!'" \
+        #            "LINES TERMINATED BY '\n' STORED AS SEQUENCEFILE"
+        # print('creating')
+        # self.cursor.execute(create_q)
+        #
+        # insert_q = "INSERT OVERWRITE TABLE la_cdr_all_with_ant_zone_by_uid_od_sum PARTITION(pdt) " \
+        #            "select arr[2] as origin, arr[3]  as destination, count(*) as tcount, count(distinct uid) as tusercount, pdt " \
+        #            "from la_cdr_all_with_ant_zone_by_uid_od_detail  where ((arr[2] != '-1' and arr[3] != '-1' ) ) " \
+        #            "group by pdt,arr[2],arr[3]"
+        #
+        # print('inserting')
+        # self.cursor.execute(insert_q)
+        # print('done')
+
+        self.cursor.execute("insert overwrite local directory '/tmp/hive/csv/la_cdr_all_with_ant_zone_by_uid_od_sum.csv' select CONCAT_WS('\t',pdt,origin ,"
+                            "destination,cast(tcount as string),cast(tusercount as string)) "
+                            "from la_cdr_all_with_ant_zone_by_uid_od_sum t1")
+
+        #
+        #
+        # self.cursor.execute("zip la_cdr_all_with_ant_zone_by_uid_od_sum.zip la_cdr_all_with_ant_zone_by_uid_od_sum.csv")
+
+        #select *,sum(ppercent) over (partition by uid order by trank asc)
+        # as acc_wsum from big5_frequent_location order by uid, trank limit 100;

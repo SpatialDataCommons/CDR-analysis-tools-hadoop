@@ -15,212 +15,233 @@ class CDRVisualizer:
     def __init__(self, config, data):
         self.__dict__ = config.__dict__
         self.hive = HiveConnector(config)
-        self.hive.initialize(config, data)
+        self.hive.initialize(config)
         self.hive.create_tables(config, data)
 
     def calculate_data_statistics(self):
-        cursor = self.hive.cursor
-        imei = "count(distinct IMEI) as unique_imei, "
-        imsi = "count(distinct IMSI) as unique_imsi, "
-        for map in self.cdr_data_layer:
-            if str.lower(map['input_name']) == 'imei' and str.lower(map['name']) == 'uid':
-                imei = ''
-            elif str.lower(map['input_name']) == 'imsi' and str.lower(map['name']) == 'uid':
-                imsi = ''
-        query = "select count(*) as total_records, " + \
-                "count(distinct call_time) as total_days, " + \
-                "count(distinct uid) as unique_id, " + \
-                imei + \
-                imsi + \
-                "count(distinct cell_id) as unique_location_name, " + \
-                "min(call_time) as start_date, " + \
-                "max(call_time)  as end_date " + \
-                "from {provider_prefix}_preprocess ".format(provider_prefix=self.provider_prefix)
+        disable = False
+        for item in self.cdr_data_layer:
+            if str.lower(item['name']) == 'call_time' and item['output_no'] == -1 \
+                or str.lower(item['name']) == 'uid' and item['output_no'] == -1 \
+                or str.lower(item['name']) == 'imei' and item['output_no'] == -1 \
+                or str.lower(item['name']) == 'imsi' and item['output_no'] == -1 \
+                or str.lower(item['name']) == 'cell_id' and item['output_no'] == -1:
+                disable = True
+        if not disable:
+            cursor = self.hive.cursor
+            imei = "count(distinct IMEI) as unique_imei, "
+            imsi = "count(distinct IMSI) as unique_imsi, "
+            for map in self.cdr_data_layer:
+                if str.lower(map['input_name']) == 'imei' and str.lower(map['name']) == 'uid':
+                    imei = ''
+                elif str.lower(map['input_name']) == 'imsi' and str.lower(map['name']) == 'uid':
+                    imsi = ''
+            query = "select count(*) as total_records, " + \
+                    "count(distinct to_date(call_time)) as total_days, " + \
+                    "count(distinct uid) as unique_id, " + \
+                    imei + \
+                    imsi + \
+                    "count(distinct cell_id) as unique_location_name, " + \
+                    "min(to_date(call_time)) as start_date, " + \
+                    "max(to_date(call_time))  as end_date " + \
+                    "from {provider_prefix}_preprocess ".format(provider_prefix=self.provider_prefix)
 
-        print('### Calculating data statistics ###')
-        cursor.execute(query)
+            print('### Calculating data statistics ###')
+            cursor.execute(query)
 
-        # TODO where to store? in the vm server or in the local machine
-        # TODO try in the local machine
-        print(self.csv_location)
-        with open("{}/css_file_data_stat.csv".format(self.csv_location), "w", newline='') as outfile:
-            writer = csv.writer(outfile, quoting=csv.QUOTE_NONNUMERIC)
-            writer.writerow(col[0] for col in cursor.description)
-            for row in cursor:
-                writer.writerow(row)
-        print('### Successfully wrote to css_file_data_stat.csv ###')
+            # TODO where to store? in the vm server or in the local machine
+            # TODO try in the local machine
+            print(self.csv_location)
+            with open("{}/css_file_data_stat.csv".format(self.csv_location), "w", newline='') as outfile:
+                writer = csv.writer(outfile, quoting=csv.QUOTE_NONNUMERIC)
+                writer.writerow(col[0] for col in cursor.description)
+                for row in cursor:
+                    writer.writerow(row)
+            print('### Successfully wrote to css_file_data_stat.csv ###')
+        else:
+            print('Mapping for call_time, imsi, imei or uid is not sufficient. Ignored data statistic')
 
     def calculate_daily_statistic(self):
-        cursor = self.hive.cursor
-        results = []
-        file_location = '{}/css_file_data_stat.csv'.format(self.csv_location)
+        disable = False
+        for item in self.cdr_data_layer:
+            if str.lower(item['name']) == 'network_type' and item['output_no'] == -1 \
+                or str.lower(item['name']) == 'call_type' and item['output_no'] == -1:
+                disable = True
+        if not disable:
+            cursor = self.hive.cursor
+            results = []
+            file_location = '{}/css_file_data_stat.csv'.format(self.csv_location)
+            imei = "count(distinct IMEI) as unique_imei, "
+            imsi = "count(distinct IMSI) as unique_imsi, "
+            replicate = False
+            for map in self.cdr_data_layer:
+                if str.lower(map['input_name']) == 'imei' and str.lower(map['name']) == 'uid':
+                    imei = ''
+                    replicate = True
+                elif str.lower(map['input_name']) == 'imsi' and str.lower(map['name']) == 'uid':
+                    imsi = ''
+                    replicate = True
 
-        imei = "count(distinct IMEI) as unique_imei, "
-        imsi = "count(distinct IMSI) as unique_imsi, "
-        replicate = False
-        for map in self.cdr_data_layer:
-            if str.lower(map['input_name']) == 'imei' and str.lower(map['name']) == 'uid':
-                imei = ''
-                replicate = True
-            elif str.lower(map['input_name']) == 'imsi' and str.lower(map['name']) == 'uid':
-                imsi = ''
-                replicate = True
+            time = hp.get_time_from_csv(file_location, replicate)
+            start_date, end_date = time['start_date'], time['end_date']
+            print('### Calculating Daily Statistics ###')
+            # FOR CASE ALL
+            query = "SELECT to_date(call_time) as date, 'ALL' as call_type, 'ALL' as network_type, COUNT(*) as total_records, " + \
+                    "COUNT(DISTINCT TO_DATE(call_time)) as total_days, " + \
+                    'COUNT(DISTINCT uid) as unique_id, ' + \
+                    imei + imsi + \
+                    'COUNT(DISTINCT cell_id) as unique_location_name ' + \
+                    "FROM {provider_prefix}_consolidate_data_all where to_date(pdt) between to_date('{start_date}') and to_date('{end_date}') " \
+                        .format(provider_prefix=self.provider_prefix, start_date=start_date, end_date=end_date) + \
+                    "GROUP BY to_date(call_time)"
 
-        time = hp.get_time_from_csv(file_location, replicate)
-        start_date, end_date = time['start_date'], time['end_date']
-        print('### Calculating Daily Statistics ###')
-        # FOR CASE ALL
-        query = "SELECT to_date(call_time) as date, 'ALL' as call_type, 'ALL' as network_type, COUNT(*) as total_records, " + \
-                "COUNT(DISTINCT TO_DATE(call_time)) as total_days, " + \
-                'COUNT(DISTINCT uid) as unique_id, ' + \
-                imei + imsi + \
-                'COUNT(DISTINCT cell_id) as unique_location_name ' + \
-                "FROM {provider_prefix}_consolidate_data_all where to_date(pdt) between to_date('{start_date}') and to_date('{end_date}') " \
-                    .format(provider_prefix=self.provider_prefix, start_date=start_date, end_date=end_date) + \
-                "GROUP BY to_date(call_time)"
+            query += ' UNION '
 
-        query += ' UNION '
+            query += "SELECT to_date(call_time) as date, call_type, 'ALL' as network_type, COUNT(*) as total_records, " + \
+                     "COUNT(DISTINCT TO_DATE(call_time)) as total_days, " + \
+                     'COUNT(DISTINCT uid) as unique_id, ' + \
+                     imei + imsi + \
+                     'COUNT(DISTINCT cell_id) as unique_location_name ' + \
+                     "FROM {provider_prefix}_consolidate_data_all where to_date(pdt) between to_date('{start_date}') and to_date('{end_date}') " \
+                         .format(provider_prefix=self.provider_prefix, start_date=start_date, end_date=end_date) + \
+                     "GROUP BY to_date(call_time), call_type"
 
-        query += "SELECT to_date(call_time) as date, call_type, 'ALL' as network_type, COUNT(*) as total_records, " + \
-                 "COUNT(DISTINCT TO_DATE(call_time)) as total_days, " + \
-                 'COUNT(DISTINCT uid) as unique_id, ' + \
-                 imei + imsi + \
-                 'COUNT(DISTINCT cell_id) as unique_location_name ' + \
-                 "FROM {provider_prefix}_consolidate_data_all where to_date(pdt) between to_date('{start_date}') and to_date('{end_date}') " \
-                     .format(provider_prefix=self.provider_prefix, start_date=start_date, end_date=end_date) + \
-                 "GROUP BY to_date(call_time), call_type"
+            query += ' UNION '
 
-        query += ' UNION '
+            query += "SELECT to_date(call_time) as date, 'ALL' as call_type,  network_type, COUNT(*) as total_records, " + \
+                     "COUNT(DISTINCT TO_DATE(call_time)) as total_days, " + \
+                     'COUNT(DISTINCT uid) as unique_id, ' + \
+                     imei + imsi + \
+                     'COUNT(DISTINCT cell_id) as unique_location_name ' + \
+                     "FROM {provider_prefix}_consolidate_data_all where to_date(pdt) between to_date('{start_date}') and to_date('{end_date}') " \
+                         .format(provider_prefix=self.provider_prefix, start_date=start_date, end_date=end_date) + \
+                     "GROUP BY to_date(call_time), network_type"
 
-        query += "SELECT to_date(call_time) as date, 'ALL' as call_type,  network_type, COUNT(*) as total_records, " + \
-                 "COUNT(DISTINCT TO_DATE(call_time)) as total_days, " + \
-                 'COUNT(DISTINCT uid) as unique_id, ' + \
-                 imei + imsi + \
-                 'COUNT(DISTINCT cell_id) as unique_location_name ' + \
-                 "FROM {provider_prefix}_consolidate_data_all where to_date(pdt) between to_date('{start_date}') and to_date('{end_date}') " \
-                     .format(provider_prefix=self.provider_prefix, start_date=start_date, end_date=end_date) + \
-                 "GROUP BY to_date(call_time), network_type"
+            query += ' UNION '
 
-        query += ' UNION '
+            query += "SELECT to_date(call_time) as date, call_type, network_type, COUNT(*) as total_records, " + \
+                     "COUNT(DISTINCT TO_DATE(call_time)) as total_days, " + \
+                     'COUNT(DISTINCT uid) as unique_id, ' + \
+                     imei + imsi + \
+                     'COUNT(DISTINCT cell_id) as unique_location_name ' + \
+                     "FROM {provider_prefix}_consolidate_data_all where to_date(pdt) between to_date('{start_date}') and to_date('{end_date}') " \
+                         .format(provider_prefix=self.provider_prefix, start_date=start_date, end_date=end_date) + \
+                     "GROUP BY to_date(call_time), call_type, network_type ORDER BY date ASC, call_type ASC, network_type DESC"
 
-        query += "SELECT to_date(call_time) as date, call_type, network_type, COUNT(*) as total_records, " + \
-                 "COUNT(DISTINCT TO_DATE(call_time)) as total_days, " + \
-                 'COUNT(DISTINCT uid) as unique_id, ' + \
-                 imei + imsi + \
-                 'COUNT(DISTINCT cell_id) as unique_location_name ' + \
-                 "FROM {provider_prefix}_consolidate_data_all where to_date(pdt) between to_date('{start_date}') and to_date('{end_date}') " \
-                     .format(provider_prefix=self.provider_prefix, start_date=start_date, end_date=end_date) + \
-                 "GROUP BY to_date(call_time), call_type, network_type ORDER BY date ASC, call_type ASC, network_type DESC"
+            cursor.execute(query)
+            description = cursor.description
+            results += cursor.fetchall()
+            file_path = '{}/css_provider_data_stat_daily.csv'.format(self.csv_location)
+            if os.path.exists(file_path):
+                os.remove(file_path)
 
-        cursor.execute(query)
-        description = cursor.description
-        results += cursor.fetchall()
-        file_path = '{}/css_provider_data_stat_daily.csv'.format(self.csv_location)
-        if os.path.exists(file_path):
-            os.remove(file_path)
-
-        with open(file_path, "w", newline='') as outfile:
-            writer = csv.writer(outfile, quoting=csv.QUOTE_NONNUMERIC)
-            writer.writerow(col[0] for col in description)
-            for row in results:
-                writer.writerow(row)
-
-        print('### Successfully wrote to file css_provider_data_stat_daily.csv ###')
+            with open(file_path, "w", newline='') as outfile:
+                writer = csv.writer(outfile, quoting=csv.QUOTE_NONNUMERIC)
+                writer.writerow(col[0][4:] for col in description)
+                for row in results:
+                    writer.writerow(row)
+            print('### Successfully wrote to file css_provider_data_stat_daily.csv ###')
+        else:
+            print('Mapping for network_type or call_type is not sufficient. Ignored daily statistics')
         # TODO output to a graph
 
     def calculate_monthly_statistic(self):
-        cursor = self.hive.cursor
-        results = []
-        file_location = '{}/css_file_data_stat.csv'.format(self.csv_location)
-        time = hp.get_time_from_csv(file_location)
-        start_y, start_m, end_y, end_m = time['start_y'], time['start_m'], time['end_y'], time['end_m']
-        imei = "count(distinct IMEI) as unique_imei, "
-        imsi = "count(distinct IMSI) as unique_imsi, "
-        for map in self.cdr_data_layer:
-            if str.lower(map['input_name']) == 'imei' and str.lower(map['name']) == 'uid':
-                imei = ''
-            elif str.lower(map['input_name']) == 'imsi' and str.lower(map['name']) == 'uid':
-                imsi = ''
-        print('### Calculating Monthly Statistics ###')
-        # FOR CASE ALL
-        query = "SELECT YEAR(call_time) as year, MONTH(call_time) as month  , 'ALL' as call_type, 'ALL' as network_type, COUNT(*) as total_records, " + \
-                "COUNT(DISTINCT TO_DATE(call_time)) as total_days, " + \
-                'COUNT(DISTINCT uid) as unique_id, ' + \
-                imei + imsi + \
-                'COUNT(DISTINCT cell_id) as unique_location_name ' + \
-                "FROM {provider_prefix}_consolidate_data_all where (year(pdt) between {start_year} and {end_year}) " \
-                    .format(provider_prefix=self.provider_prefix, start_year=start_y, end_year=end_y) + \
-                "and (MONTH(pdt) between {start_month} and {end_month}) GROUP BY YEAR(call_time), MONTH(call_time)" \
-                    .format(start_month=start_m, end_month=end_m)
+        disable = False
+        for item in self.cdr_data_layer:
+            if str.lower(item['name']) == 'network_type' and item['output_no'] == -1 \
+                    or str.lower(item['name']) == 'call_type' and item['output_no'] == -1:
+                disable = True
+        if not disable:
+            cursor = self.hive.cursor
+            results = []
+            file_location = '{}/css_file_data_stat.csv'.format(self.csv_location)
 
-        query += ' UNION '
+            imei = "count(distinct IMEI) as unique_imei, "
+            imsi = "count(distinct IMSI) as unique_imsi, "
+            replicate = False
 
-        query += "SELECT YEAR(call_time) as year, MONTH(call_time) as month, call_type, 'ALL' as network_type, COUNT(*) as total_records, " + \
-                 "COUNT(DISTINCT TO_DATE(call_time)) as total_days, " + \
-                 'COUNT(DISTINCT uid) as unique_id, ' + \
-                 'COUNT(DISTINCT imei) as unique_imei, COUNT(DISTINCT imsi) unique_imsi, ' + \
-                 'COUNT(DISTINCT cell_id) as unique_location_name ' + \
-                 "FROM {provider_prefix}_consolidate_data_all where (year(pdt) between {start_year} and {end_year}) " \
-                     .format(provider_prefix=self.provider_prefix, start_year=start_y, end_year=end_y) + \
-                 "and (MONTH(pdt) between {start_month} and {end_month}) GROUP BY YEAR(call_time), MONTH(call_time), call_type" \
-                     .format(start_month=start_m, end_month=end_m)
+            for map in self.cdr_data_layer:
+                if str.lower(map['input_name']) == 'imei' and str.lower(map['name']) == 'uid':
+                    imei = ''
+                    replicate = True
+                elif str.lower(map['input_name']) == 'imsi' and str.lower(map['name']) == 'uid':
+                    imsi = ''
+                    replicate = True
 
-        query += ' UNION '
+            time = hp.get_time_from_csv(file_location, replicate)
+            start_y, start_m, end_y, end_m = time['start_y'], time['start_m'], time['end_y'], time['end_m']
+            print('### Calculating Monthly Statistics ###')
+            # FOR CASE ALL
+            query = "SELECT YEAR(call_time) as year, MONTH(call_time) as month  , 'ALL' as call_type, 'ALL' as network_type, COUNT(*) as total_records, " + \
+                    "COUNT(DISTINCT TO_DATE(call_time)) as total_days, " + \
+                    'COUNT(DISTINCT uid) as unique_id, ' + \
+                    imei + imsi + \
+                    'COUNT(DISTINCT cell_id) as unique_location_name ' + \
+                    "FROM {provider_prefix}_consolidate_data_all where (year(pdt) between {start_year} and {end_year}) " \
+                        .format(provider_prefix=self.provider_prefix, start_year=start_y, end_year=end_y) + \
+                    "and (MONTH(pdt) between {start_month} and {end_month}) GROUP BY YEAR(call_time), MONTH(call_time)" \
+                        .format(start_month=start_m, end_month=end_m)
 
-        query += "SELECT YEAR(call_time) as year, MONTH(call_time) as month, 'ALL' as call_type,  network_type, COUNT(*) as total_records, " + \
-                 "COUNT(DISTINCT TO_DATE(call_time)) as total_days, " + \
-                 'COUNT(DISTINCT uid) as unique_id, ' + \
-                 imei + imsi + \
-                 'COUNT(DISTINCT cell_id) as unique_location_name ' + \
-                 "FROM {provider_prefix}_consolidate_data_all where (year(pdt) between {start_year} and {end_year}) " \
-                     .format(provider_prefix=self.provider_prefix, start_year=start_y, end_year=end_y) + \
-                 "and (MONTH(pdt) between {start_month} and {end_month}) GROUP BY YEAR(call_time), MONTH(call_time), network_type" \
-                     .format(start_month=start_m, end_month=end_m)
+            query += ' UNION '
 
-        query += ' UNION '
-        query += "SELECT YEAR(call_time) as year, MONTH(call_time) as month , call_type, network_type, COUNT(*) as total_records, " + \
-                 "COUNT(DISTINCT TO_DATE(call_time)) as total_days, " + \
-                 'COUNT(DISTINCT uid) as unique_id, ' + \
-                 imei + imsi + \
-                 'COUNT(DISTINCT cell_id) as unique_location_name ' + \
-                 "FROM {provider_prefix}_consolidate_data_all where (year(pdt) between {start_year} and {end_year}) " \
-                     .format(provider_prefix=self.provider_prefix, start_year=start_y, end_year=end_y) + \
-                 "and (MONTH(pdt) between {start_month} and {end_month}) GROUP BY YEAR(call_time), MONTH(call_time), call_type, network_type ".format(
-                     start_month=start_m, end_month=end_m) + \
-                 "ORDER BY year ASC, month ASC, call_type ASC, network_type DESC"
+            query += "SELECT YEAR(call_time) as year, MONTH(call_time) as month, call_type, 'ALL' as network_type, COUNT(*) as total_records, " + \
+                     "COUNT(DISTINCT TO_DATE(call_time)) as total_days, " + \
+                     'COUNT(DISTINCT uid) as unique_id, ' + \
+                     'COUNT(DISTINCT imei) as unique_imei, COUNT(DISTINCT imsi) unique_imsi, ' + \
+                     'COUNT(DISTINCT cell_id) as unique_location_name ' + \
+                     "FROM {provider_prefix}_consolidate_data_all where (year(pdt) between {start_year} and {end_year}) " \
+                         .format(provider_prefix=self.provider_prefix, start_year=start_y, end_year=end_y) + \
+                     "and (MONTH(pdt) between {start_month} and {end_month}) GROUP BY YEAR(call_time), MONTH(call_time), call_type" \
+                         .format(start_month=start_m, end_month=end_m)
 
-        cursor.execute(query)
-        description = cursor.description
-        results += cursor.fetchall()
+            query += ' UNION '
 
-        file_path = '{}/css_provider_data_stat_monthly.csv'.format(self.csv_location)
-        if os.path.exists(file_path):
-            os.remove(file_path)
+            query += "SELECT YEAR(call_time) as year, MONTH(call_time) as month, 'ALL' as call_type,  network_type, COUNT(*) as total_records, " + \
+                     "COUNT(DISTINCT TO_DATE(call_time)) as total_days, " + \
+                     'COUNT(DISTINCT uid) as unique_id, ' + \
+                     imei + imsi + \
+                     'COUNT(DISTINCT cell_id) as unique_location_name ' + \
+                     "FROM {provider_prefix}_consolidate_data_all where (year(pdt) between {start_year} and {end_year}) " \
+                         .format(provider_prefix=self.provider_prefix, start_year=start_y, end_year=end_y) + \
+                     "and (MONTH(pdt) between {start_month} and {end_month}) GROUP BY YEAR(call_time), MONTH(call_time), network_type" \
+                         .format(start_month=start_m, end_month=end_m)
 
-        with open(file_path, "w", newline='') as outfile:
-            writer = csv.writer(outfile, quoting=csv.QUOTE_NONNUMERIC)
-            writer.writerow(col[0] for col in description)
-            for row in results:
-                writer.writerow(row)
+            query += ' UNION '
+            query += "SELECT YEAR(call_time) as year, MONTH(call_time) as month , call_type, network_type, COUNT(*) as total_records, " + \
+                     "COUNT(DISTINCT TO_DATE(call_time)) as total_days, " + \
+                     'COUNT(DISTINCT uid) as unique_id, ' + \
+                     imei + imsi + \
+                     'COUNT(DISTINCT cell_id) as unique_location_name ' + \
+                     "FROM {provider_prefix}_consolidate_data_all where (year(pdt) between {start_year} and {end_year}) " \
+                         .format(provider_prefix=self.provider_prefix, start_year=start_y, end_year=end_y) + \
+                     "and (MONTH(pdt) between {start_month} and {end_month}) GROUP BY YEAR(call_time), MONTH(call_time), call_type, network_type ".format(
+                         start_month=start_m, end_month=end_m) + \
+                     "ORDER BY year ASC, month ASC, call_type ASC, network_type DESC"
 
-        print('### Successfully wrote to file css_provider_data_stat_monthly.csv ###')
-        # TODO output to a graph
+            cursor.execute(query)
+            description = cursor.description
+            results += cursor.fetchall()
+
+            file_path = '{}/css_provider_data_stat_monthly.csv'.format(self.csv_location)
+            if os.path.exists(file_path):
+                os.remove(file_path)
+
+            with open(file_path, "w", newline='') as outfile:
+                writer = csv.writer(outfile, quoting=csv.QUOTE_NONNUMERIC)
+                writer.writerow(col[0][4:] for col in description)
+                for row in results:
+                    writer.writerow(row)
+
+            print('### Successfully wrote to file css_provider_data_stat_monthly.csv###')
+            # TODO output to a graph
+        else:
+            print('Mapping for network_type or call_type is not sufficient. Ignored monthly statistics')
 
     def calculate_frequent_locations(self):
         cursor = self.hive.cursor
         # join by cell_id and get its admin unit
-        query = "select a1.uid, count(a1.uid) as count, " + \
-                "count(a1.uid)/SUM(count(a1.uid)) OVER(partition by a1.uid) * 100 as percentage, " + \
-                "ROW_NUMBER() OVER(PARTITION BY a1.uid order by count(a1.uid) DESC) as rank" + \
-                ", concat(a2.latitude, ' : ', a2.longitude) as unique_location " + \
-                "from {provider_prefix}_consolidate_data_all a1 ".format(provider_prefix=self.provider_prefix) + \
-                "JOIN {provider_prefix}_cell_tower_data_preprocess a2 ".format(
-                    provider_prefix=self.provider_prefix) + \
-                "ON(a1.cell_id = a2.cell_id) group by a1.uid, " + \
-                "concat(a2.latitude, ' : ', a2.longitude) " + \
-                "order by a1.uid, count DESC"
+        query = "SELECT * from {provider_prefix}_frequent_location order by uid, trank ASC".format(provider_prefix=self.provider_prefix)
 
-        print('QUERYing DONE')
         cursor.execute(query)
         print(query)
 
@@ -232,7 +253,9 @@ class CDRVisualizer:
             row_i = 0
         description = cursor.description
         print(description)
-        rows = cursor.fetchall()
+        rows = []
+        for row in cursor:
+            rows.append(row)
         print('FETCHED!')
         while row_i < len(rows):
             if rows[row_i][0] == active_id:
@@ -301,6 +324,7 @@ class CDRVisualizer:
             for row in rows:
                 writer.writerow(row)
 
+
     def calculate_frequent_locations_day(self):
         cursor = self.hive.cursor
         query = "select a1.uid, count(a1.uid) as count, " + \
@@ -355,7 +379,10 @@ class CDRVisualizer:
         for col in self.cdr_cell_tower:
             if col['name'] in admin_units:
                 admin_units_active.append(col['name'])
-                geo_jsons_active.append(hp.json_file_to_object(col['geojson_filename'], encoding="utf-8"))
+                if col['geojson_filename'] == '':
+                    geo_jsons_active.append('')
+                else:
+                    geo_jsons_active.append(hp.json_file_to_object(col['geojson_filename'], encoding="utf-8"))
                 name_columns.append(col['geojson_col_name'])
                 geo_json_filename.append(col['geojson_filename'])
         geo_i = 0
@@ -380,12 +407,12 @@ class CDRVisualizer:
             #     for row in rows:
             #         writer.writerow(row)
 
-
             file_path = '{csv_location}/zone_based_aggregations_level_{level}.csv'.format(csv_location=self.csv_location, level=admin_unit)
-            for f in range(0, len(geo_jsons_active[geo_i]['features'])):
+            if geo_jsons_active[geo_i] != '':
+                for f in range(0, len(geo_jsons_active[geo_i]['features'])):
 
-                if geo_jsons_active[geo_i]['features'][f]['properties'][name_columns[geo_i]] == 'Kochi Ken':
-                    geo_jsons_active[geo_i]['features'][f]['properties']['num_population'] = 'Kochi Ken'
+                    if geo_jsons_active[geo_i]['features'][f]['properties'][name_columns[geo_i]] == 'Kochi Ken':
+                        geo_jsons_active[geo_i]['features'][f]['properties']['num_population'] = 'Kochi Ken'
 
             if os.path.exists(file_path):
                 os.remove(file_path)
@@ -396,8 +423,9 @@ class CDRVisualizer:
                 for row in rows:
                     writer.writerow(row)
 
-            with open(geo_json_filename[geo_i][:-4] + '_joined_' + admin_unit + '.json', "w", newline='') as outfile:
-                json.dump(geo_jsons_active[geo_i], outfile)
+            if geo_json_filename[geo_i] != '':
+                with open(geo_json_filename[geo_i][:-4] + '_joined_' + admin_unit + '.json', "w", newline='') as outfile:
+                    json.dump(geo_jsons_active[geo_i], outfile)
             geo_i += 1
 
     def calculate_user_date_histogram(self):
@@ -501,7 +529,7 @@ class CDRVisualizer:
                 if start_month == end_month:
                     # no same day because it is gonna be total_days 1, which is done above
                     row_total_days = (des[0][0], str(row_total_days[0][0]) +
-                                      ' ({}-{} {} {})'.format(int(start_day), end_day,
+                                      ' ({}-{} {} {})'.format(int(start_day), int(end_day),
                                       months[int(start_month)], start_year))
                 else:
                     # for different months, same or different day will also be outputted

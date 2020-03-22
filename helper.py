@@ -18,6 +18,19 @@ def string_to_json(str_in):
     return json.loads(str_in)
 
 
+def get_admin_units_from_mapping(cell_tower_mapping):
+    admin_units = []
+    admins = ['admin0', 'admin1', 'admin2', 'admin3', 'admin4', 'admin5']
+    admins.reverse()
+    for row in cell_tower_mapping:
+        for admin in admins:
+            if row['output_no'] != -1 and str.lower(row['name']) == admin:
+                admin_units.append(row['name'])
+
+    print('Result admin units = {}'.format(', '.join(admin_units)))
+    return admin_units
+
+
 def get_time_from_csv(file_loc, im_replicate):
     with open(file_loc) as csv_file:
         csv_reader = csv.reader(csv_file, delimiter=',')
@@ -52,7 +65,6 @@ def get_time_from_csv(file_loc, im_replicate):
     result['end_y'] = end_date.year
 
     return result
-
 
 def make_graph(xs, x_label, ys, y_label, header, filename, des_pair_1=None, des_pair_2=None, des_pair_3=None, des_pair_4=None):
     figure = plt.figure(figsize=(14, 11))
@@ -123,14 +135,12 @@ def extract_mapping_data(config, data):
         arguments_raw = []
         arguments_con = []
         for argument in mappings[i]:
+            arguments_prep.append(argument['name'] + ' ' + argument['data_type'])
+            arguments_con.append(argument['name'])
             if argument['output_no'] != -1:
-                arguments_prep.append(argument['name'] + ' ' + argument['data_type'])
-                arguments_con.append(argument['name'])
                 if argument['input_no'] != -1:
                     arguments_raw.append(argument['input_name'] + ' ' + argument['data_type'])
-
-                    # TODO validate each field in the custom arguments and make sure their input_no is not -1
-                    if 'custom' in argument:
+                    if 'custom' in argument and argument['custom'] != '':
                         if str.lower(argument['name']) == 'call_time' and config.input_file_time_format != "":
                             arguments_map.append("from_unixtime(unix_timestamp({custom} "
                                                  ",'{time_format}'), 'yyyy-MM-dd hh:mm:ss') as call_time"
@@ -148,13 +158,21 @@ def extract_mapping_data(config, data):
                         else:
                             arguments_map.append(argument['input_name'] + ' as ' + argument['name'])
                 else:
-                    # TODO validate each field in the custom arguments and make sure their input_no is not -1
-                    if 'custom' in argument:
+                    # input -1 output 1 for custom
+                    if 'custom' in argument and argument['custom'] != '':
                         arguments_map.append(argument['custom'] + ' as ' + argument['name'])
+                        print('Output ' + argument['name'] + ' ignored ')
+                    # else =  cdr without custom or cell tower, this case insert -1
                     else:
                         arguments_map.append('-1' + ' as ' + argument['name'])
+                        print('Output ' + argument['name'] + ' ignored ')
+
             elif argument['input_no'] != -1:
                 arguments_raw.append(argument['input_name'] + ' ' + argument['data_type'])
+                arguments_map.append('-1' + ' as ' + argument['name'])
+            else:# input -1 output -1 insert -1
+                arguments_map.append('-1' + ' as ' + argument['name'])
+
         if i == 0:
             data.arg_cdr_map, data.arg_cdr_raw, data.arg_cdr_prep, data.arg_cdr_con = \
                 arguments_map, arguments_raw, arguments_prep, arguments_con
