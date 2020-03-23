@@ -135,8 +135,21 @@ In config.json file, you need to assign the right path, prefix, location and so 
   * Python pip3 (a Python package installer)
   
 ## Installation
+clone the repository and then
 install all requirement packages in requirements.txt using command 
   * pip install -r requirements.txt
+  
+## Usage
+
+Go to config.json or config_big.json to see the configuration files to setup the variables and 
+start mapping your data.
+
+Then go to main.py in the #user section and run
+
+$python3 main.py -c {config_file}
+
+Each command is self-explanatory. You may have some error due to mapping but after fixing it, you can continue from the most current function. If you do not want the tables to be deleted and created again, go to hive_connector.py and then comment the line with function create_tables in the __init__ function
+
 
 ## License
 Free to use and distribute with acknowledgement.
