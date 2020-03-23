@@ -22,7 +22,7 @@ class CDRVisualizer:
         print('Done. Time elapsed: {} seconds'.format(time.time() - timer))
         timer = time.time()
         print('Creating Tables')
-        # self.hive.create_tables(config, data)
+        self.hive.create_tables(config, data)
         print('Done create all tables. Time elapsed: {} seconds'.format(time.time() - timer))
 
     def calculate_data_statistics(self):
