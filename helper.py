@@ -66,6 +66,7 @@ def get_time_from_csv(file_loc, im_replicate):
 
     return result
 
+
 def make_graph(xs, x_label, ys, y_label, header, filename, des_pair_1=None, des_pair_2=None, des_pair_3=None, des_pair_4=None):
     figure = plt.figure(figsize=(14, 11))
 
@@ -86,14 +87,14 @@ def make_graph(xs, x_label, ys, y_label, header, filename, des_pair_1=None, des_
     if des_pair_1 is not None:
         plt.text(des_pair_1['text_x'],  des_pair_1['text_y'], des_pair_1['text'], transform=ax.transAxes)
         axbox = plt.axes([0.1, 0.87, 0.2, 0.04])
-        offset = 42 - 2*len(des_pair_1['value'])
+        offset = 60 - 2*len(des_pair_1['value'])
         text1 = ''
         for i in range(0, offset):
             text1 += ' '
         text_box = TextBox(axbox, '', initial=text1 + des_pair_1['value'], color='orange', label_pad=0.005)
         text_box.disconnect_events()
     if des_pair_2 is not None:
-        offset = 42 - 2*len(des_pair_2['value'])
+        offset = 60 - 2*len(des_pair_2['value'])
         text2 = ''
         for i in range(0, offset):
             text2 += ' '
@@ -103,7 +104,7 @@ def make_graph(xs, x_label, ys, y_label, header, filename, des_pair_1=None, des_
         text_box = TextBox(axbox, '', initial=text2 + des_pair_2['value'], color='blue')
         text_box.disconnect_events()
     if des_pair_3 is not None:
-        offset = 42 - 2*len(des_pair_3['value'])
+        offset = 60 - 2*len(des_pair_3['value'])
         text3 = ''
         for i in range(0, offset):
             text3 += ' '
@@ -113,7 +114,7 @@ def make_graph(xs, x_label, ys, y_label, header, filename, des_pair_1=None, des_
         text_box = TextBox(axbox, '', initial=text3 + des_pair_3['value'], color='green')
         text_box.disconnect_events()
     if des_pair_4 is not None:
-        offset = 42 - 2*len(des_pair_4['value'])
+        offset = 60 - 2*len(des_pair_4['value'])
         text4 = ''
         for i in range(0, offset):
             text4 += ' '

@@ -3,10 +3,11 @@ from cdr_visualizer import CDRVisualizer
 from cdr_data import CDRData
 from helper import extract_mapping_data
 import argparse
-
+import time
 
 def main():
     # argument parser
+    start = time.time()
     parser = argparse.ArgumentParser(description='Argument indicating the configuration file')
 
     # add configuration argument
@@ -22,15 +23,15 @@ def main():
     vs = CDRVisualizer(config, cdr_data)
 
     # user section here
-    vs.calculate_data_statistics()
+    # vs.calculate_data_statistics()
     vs.calculate_daily_statistic()
-    vs.calculate_monthly_statistic()
-    # vs.calculate_frequent_locations()
-    vs.calculate_zone_population()
-    vs.calculate_user_date_histogram()
-    vs.calculate_summary()
+    # vs.calculate_monthly_statistic()
+    #
+    # vs.calculate_zone_population()
+    # vs.calculate_user_date_histogram()
+    # vs.calculate_summary()
     # vs.calculate_od()
-
+    print('Overall time elapsed: {} seconds'.format(time.time() - start))
 
 if __name__ == '__main__':
     main()

@@ -4,7 +4,7 @@
 	"db_name" : "cdrproject",
 
 	"input_delimiter":",",
-	"input_files" :["2016-03-01.csv","2016-03-03.csv"],
+	"input_files" :["2016-03-01.csv","2016-03-02.csv","2016-03-03.csv","2016-03-04.csv","2016-03-05.csv"],
 	"_comment": ["if time format is well formed (like yyyy/mm/dd or dd-mm-yyyy and colons(:) separating time, then leave it blank",
 	"if the time format has no separator then indicate it (ex. yyyyMMdd (can't be automatically recognized) hh:mm:ss)"],
 	"input_file_time_format": "",
@@ -31,6 +31,7 @@
 
 	"cdr_data_layer_comment_": ["do not remove or change the name of the mandatory output columns",
 								"if you don't have anything to map to the output, put -1 in the output_no",
+								"if you have input that is not used and not mapped, insert a row with input_no = -1 and output_no = -1",
 								"If a column is in your raw table, put input_no non-negative in the order of your column order",
 								"network_type must be in 2G, 3G, 4G, 5G or put -1 to the output_no of both network_type and call_type",
 								"call_type must be in Voice, Data, Call and SMS or put -1 to the output_no of both network_type and call_type",
