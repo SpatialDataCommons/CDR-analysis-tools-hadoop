@@ -3,7 +3,5 @@ cdrenv/
 japan.json
 config.json
 config_big.json
-*joined*.json
 __pycache__
-*ADMIN*
 output/
