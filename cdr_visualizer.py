@@ -2,7 +2,7 @@ import json
 import csv
 import matplotlib.pyplot as plt
 import os
-from hive_connector import HiveConnector
+from hive_create_tables import HiveConnector
 import helper as hp
 import time
 from datetime import datetime
@@ -21,7 +21,7 @@ class CDRVisualizer:
         print('########## Done. Time elapsed: {} seconds ##########'.format(hp.format_two_point_time(timer, time.time())))
         timer = time.time()
         print('########## Creating Tables ##########')
-        # self.hive.create_tables(config, data)
+        self.hive.create_tables(config, data)
         print('########## Done create all tables. Time elapsed: {} seconds ##########'.format(hp.format_two_point_time(timer, time.time())))
 
     def calculate_data_statistics(self):
@@ -71,7 +71,7 @@ class CDRVisualizer:
         else:
             print('Mapping for call_time, imsi, imei or uid is not sufficient. Ignored data statistic')
 
-    def calculate_daily_statistic(self):
+    def calculate_daily_statistics(self):
         imei = "count(distinct IMEI) as unique_imei, "
         imsi = "count(distinct IMSI) as unique_imsi, "
         replicate = False
@@ -240,7 +240,7 @@ class CDRVisualizer:
 
 
 
-    def calculate_monthly_statistic(self):
+    def calculate_monthly_statistics(self):
         disable = False
         for item in self.cdr_data_layer:
             if str.lower(item['name']) == 'network_type' and item['output_no'] == -1 \

@@ -1,8 +1,8 @@
 .idea/
 cdrenv/
-output_reports/
-output_graphical_reports/
+*reports*/
 japan.json
 *joined*.json
 __pycache__
 *ADMIN*
+output/

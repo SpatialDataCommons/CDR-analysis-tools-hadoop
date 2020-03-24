@@ -24,17 +24,17 @@ def main():
 
     # user section here
     # vs.calculate_data_statistics()
-    # vs.calculate_daily_statistic()
-    # vs.calculate_monthly_statistic()
+    # vs.calculate_daily_statistics()
+    # vs.calculate_monthly_statistics()
     #
     # vs.calculate_zone_population()
     # vs.calculate_user_date_histogram()
     # vs.calculate_summary()
-    vs.daily_cdrs()
-    vs.daily_unique_users()
-    vs.daily_unique_locations()
-    vs.daily_average_cdrs()
-    vs.daily_unique_average_locations()
+    # vs.daily_cdrs()
+    # vs.daily_unique_users()
+    # vs.daily_unique_locations()
+    # vs.daily_average_cdrs()
+    # vs.daily_unique_average_locations()
     # vs.calculate_od()
     print('Overall time elapsed: {} seconds'.format(format_two_point_time(start, time.time())))
 

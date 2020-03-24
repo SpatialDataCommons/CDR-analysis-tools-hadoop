@@ -18,17 +18,17 @@ class HiveConnector:
             os.makedirs(config.output_graph_location)
 
     def create_tables(self, config, data):
-        self.import_cell_tower_data_raw(config, data)
-        self.preprocess_cell_tower_data(config, data)
+        # self.import_cell_tower_data_raw(config, data)
+        # self.preprocess_cell_tower_data(config, data)
+
+        # admins = get_admin_units_from_mapping(config.cdr_cell_tower)
         #
-        admins = get_admin_units_from_mapping(config.cdr_cell_tower)
+        # for admin in admins:
+        #     self.cell_tower_data_admin(config, admin)
 
-        for admin in admins:
-            self.cell_tower_data_admin(config, admin)
-
-        self.import_raw(config, data)
-        self.preprocess_data(config, data)
-        self.consolidate_table(config, data)
+        # self.import_raw(config, data)
+        # self.preprocess_data(config, data)
+        # self.consolidate_table(config, data)
         self.frequent_location(config)
         self.frequent_location_night(config)
         self.rank1_frequent_location(config)
@@ -284,8 +284,8 @@ class HiveConnector:
         timer = time.time()
         print('Inserting into frequent location table')
         query = "INSERT INTO TABLE {provider_prefix}_frequent_location SELECT a1.uid, a2.cell_id, " \
-                "count(a1.uid) as tcount, ROW_NUMBER() OVER(PARTITION BY a1.uid order by count(a1.uid) DESC) as rank, " \
-                "count(a1.uid)/SUM(count(a1.uid)) OVER(partition by a1.uid) * 100 as percentage " \
+                "count(a1.uid) as tcount, ROW_NUMBER() OVER(PARTITION BY a1.uid, a2.cell_id order by count(a1.uid) DESC) as rank, " \
+                "count(a1.uid)/SUM(count(a1.uid)) OVER(partition by a1.uid, a2.cell_id) * 100 as percentage " \
                 ", a2.longitude, a2.latitude, a3.{admin_params} from {provider_prefix}_consolidate_data_all a1 " \
                 "JOIN {provider_prefix}_cell_tower_data_preprocess a2  ON(a1.cell_id = a2.cell_id) " \
                 "JOIN {provider_prefix}_cell_tower_data_{admin} a3 on(a2.latitude = a3.latitude and a2.longitude = a3.longitude) " \
@@ -296,6 +296,48 @@ class HiveConnector:
         self.cursor.execute(query)
         print('Inserted into frequent location table.\nResult are in the table named {provider_prefix}_frequent_location\nElapsed time: {time} seconds. '
               .format(provider_prefix=config.provider_prefix, time=format_two_point_time(timer, time.time())))
+        timer = time.time()
+        print('Dropping freq location with accumulated percentage')
+        self.cursor.execute(
+            'DROP TABLE IF EXISTS {provider_prefix}_freq_with_acc_wsum'.format(provider_prefix=config.provider_prefix))
+        print('Checked and dropped frequent location table with accumulated percentage if existing. Elapsed time: {} seconds'.format(
+            format_two_point_time(timer, time.time())))
+        timer = time.time()
+        print('Creating and insert freq with acc wsum Table (Frequent Location) with accumulated percentage')
+        query = "CREATE table {provider_prefix}_freq_with_acc_wsum as select uid, cell_id, tcount, "\
+                "trank, ppercent, longitude, latitude , {admin}_id, "\
+                "sum(ppercent) over (partition by uid, cell_id order by trank asc)"\
+                "as acc_wsum from {provider_prefix}_frequent_location "\
+                "order by uid, cell_id, trank".format(provider_prefix=config.provider_prefix, admin=admin)
+        self.cursor.execute(query)
+        print(
+            'Inserted into frequent location table with accumulated percentage. \nElapsed time: {time} seconds. '
+            .format(time=format_two_point_time(timer, time.time())))
+        timer = time.time()
+        print('Dropping frequent location thresholded table')
+        self.cursor.execute(
+            'DROP TABLE IF EXISTS big5_frequent_location_thresholded'.format(provider_prefix=config.provider_prefix))
+        print(
+            'Checked and dropped frequent location table with accumulated percentage if existing. Elapsed time: {} seconds'.format(
+                format_two_point_time(timer, time.time())))
+        timer = time.time()
+        print('Creating and insert frequent location thresholded table ')
+        query = "create table {provider_prefix}_frequent_location_thresholded as select td3.uid as uid, td3.cell_id as cell_id, td3.tcount " \
+                "as tcount, td3.trank as trank, td3.ppercent as ppercent, td3.longitude as longitude, td3.latitude as latitude,"\
+                "td3.{admin}_id as {admin}_id, td3.acc_wsum as acc_wsum, td3.min_acc_wsum as min_acc_wsum from "\
+                "(select a1.uid as uid, a1.cell_id as cell_id, a1.tcount as tcount, a1.trank as trank,"\
+                "a1.ppercent as ppercent, a1.longitude as longitude, a1.latitude as latitude,"\
+                "a1.{admin}_id as {admin}_id, a1.acc_wsum as acc_wsum, td2.min_acc_wsum as min_acc_wsum "\
+                "from {provider_prefix}_freq_with_acc_wsum a1 "\
+                "join (select td.uid as uid, td.cell_id as cell_id , min(td.acc_wsum) as min_acc_wsum from ("\
+                "select uid, cell_id, acc_wsum from  {provider_prefix}_freq_with_acc_wsum " \
+                "where acc_wsum >= {threshold} group by uid, cell_id, acc_wsum)td group by td.uid, td.cell_id) td2 "\
+                "on (a1.uid = td2.uid and a1.cell_id = td2.cell_id)) td3 where acc_wsum <= min_acc_wsum "\
+                .format(provider_prefix=config.provider_prefix, admin=admin, threshold=config.frequent_location_percentage)
+        self.cursor.execute(query)
+        print(
+            'Inserted into frequent location thresholded table. \nElapsed time: {time} seconds. '
+                .format(time=format_two_point_time(timer, time.time())))
         print('########## FINISHED CREATING FREQUENT LOCATION TABLE ##########')
 
     def frequent_location_night(self, config):
@@ -318,9 +360,9 @@ class HiveConnector:
         print('Created frequent location night table. Elapsed time: {} seconds'.format(format_two_point_time(timer, time.time())))
         timer = time.time()
         print('Inserting into frequent location night table')
-        query = "INSERT INTO TABLE {provider_prefix}_frequent_location SELECT a1.uid, a2.cell_id, " \
-                "count(a1.uid) as tcount, ROW_NUMBER() OVER(PARTITION BY a1.uid order by count(a1.uid) DESC) as rank, " \
-                "count(a1.uid)/SUM(count(a1.uid)) OVER(partition by a1.uid) * 100 as percentage " \
+        query = "INSERT INTO  TABLE {provider_prefix}_frequent_location_night SELECT a1.uid, a2.cell_id, " \
+                "count(a1.uid) as tcount, ROW_NUMBER() OVER(PARTITION BY a1.uid, a2.cell_id order by count(a1.uid) DESC) as rank, " \
+                "count(a1.uid)/SUM(count(a1.uid)) OVER(partition by a1.uid, a2.cell_id) * 100 as percentage " \
                 ", a2.longitude, a2.latitude, a3.{admin_params} from {provider_prefix}_consolidate_data_all a1 " \
                 "JOIN {provider_prefix}_cell_tower_data_preprocess a2  ON(a1.cell_id = a2.cell_id) " \
                 "JOIN {provider_prefix}_cell_tower_data_{admin} a3 on(a2.latitude = a3.latitude and a2.longitude = a3.longitude) " \
@@ -331,6 +373,50 @@ class HiveConnector:
         self.cursor.execute(query)
         print('Inserted into frequent location night table.\nResult are in the table named {provider_prefix}_frequent_location_night\nElapsed time: {time} seconds. '
               .format(provider_prefix=config.provider_prefix, time=format_two_point_time(timer, time.time())))
+        timer = time.time()
+        print('Dropping freq location night with accumulated percentage')
+        self.cursor.execute(
+            'DROP TABLE IF EXISTS {provider_prefix}_freq_with_acc_wsum_night'.format(provider_prefix=config.provider_prefix))
+        print(
+            'Checked and dropped frequent location night table with accumulated percentage if existing. Elapsed time: {} seconds'.format(
+                format_two_point_time(timer, time.time())))
+        timer = time.time()
+        print('Creating and insert freq night with acc wsum Table (Frequent Location Night) with accumulated percentage')
+        query = "CREATE table {provider_prefix}_freq_with_acc_wsum_night as select uid, cell_id, tcount, " \
+                "trank, ppercent, longitude, latitude , {admin}_id, " \
+                "sum(ppercent) over (partition by uid, cell_id order by trank asc)" \
+                "as acc_wsum from {provider_prefix}_frequent_location_night " \
+                "order by uid, cell_id, trank".format(provider_prefix=config.provider_prefix, admin=admin)
+        self.cursor.execute(query)
+        print(
+            'Inserted into frequent location night table with accumulated percentage. \nElapsed time: {time} seconds. '
+                .format(time=format_two_point_time(timer, time.time())))
+        timer = time.time()
+        print('Dropping frequent location thresholded night table')
+        self.cursor.execute(
+            'DROP TABLE IF EXISTS big5_frequent_location_thresholded_night'.format(provider_prefix=config.provider_prefix))
+        print(
+            'Checked and dropped frequent location night table with accumulated percentage if existing. Elapsed time: {} seconds'.format(
+                format_two_point_time(timer, time.time())))
+        timer = time.time()
+        print('Creating and insert frequent location thresholded night table ')
+        query = "create table {provider_prefix}_frequent_location_thresholded_night as select td3.uid as uid, td3.cell_id as cell_id, td3.tcount " \
+                "as tcount, td3.trank as trank, td3.ppercent as ppercent, td3.longitude as longitude, td3.latitude as latitude," \
+                "td3.{admin}_id as {admin}_id, td3.acc_wsum as acc_wsum, td3.min_acc_wsum as min_acc_wsum from " \
+                "(select a1.uid as uid, a1.cell_id as cell_id, a1.tcount as tcount, a1.trank as trank," \
+                "a1.ppercent as ppercent, a1.longitude as longitude, a1.latitude as latitude," \
+                "a1.{admin}_id as {admin}_id, a1.acc_wsum as acc_wsum, td2.min_acc_wsum as min_acc_wsum " \
+                "from {provider_prefix}_freq_with_acc_wsum_night a1 " \
+                "join (select td.uid as uid, td.cell_id as cell_id , min(td.acc_wsum) as min_acc_wsum from (" \
+                "select uid, cell_id, acc_wsum from  {provider_prefix}_freq_with_acc_wsum_night " \
+                "where acc_wsum >= {threshold} group by uid, cell_id, acc_wsum)td group by td.uid, td.cell_id) td2 " \
+                "on (a1.uid = td2.uid and a1.cell_id = td2.cell_id)) td3 where acc_wsum <= min_acc_wsum " \
+            .format(provider_prefix=config.provider_prefix, admin=admin, threshold=config.frequent_location_percentage)
+        self.cursor.execute(query)
+
+        print(
+            'Inserted into frequent location thresholded night table. \nElapsed time: {time} seconds. '
+                .format(time=format_two_point_time(timer, time.time())))
         print('########## FINISHED CREATING FREQUENT LOCATION NIGHT TABLE ##########')
 
     def rank1_frequent_location(self, config):
