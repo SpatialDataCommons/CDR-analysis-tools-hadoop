@@ -149,7 +149,76 @@ Then go to main.py in the #user section and run
 $python3 main.py -c {config_file}
 
 Each command is self-explanatory. You may have some error due to mapping but after fixing it, you can continue from the most current function. If you do not want the tables to be deleted and created again, go to hive_connector.py and then comment the line with function create_tables in the __init__ function
+**
 
+There are mainly 3 sections you may want to customize. 
+
+**main.py in main()**
+```
+def main():
+    # argument parser
+    start = time.time()
+    parser = argparse.ArgumentParser(description='Argument indicating the configuration file')
+
+    # add configuration argument
+    parser.add_argument("-c", "--config", help="add a configuration file you would like to process the cdr data"
+                                               " \n ex. py py_hive_connect.py -c config.json",
+                        action="store")
+
+    # parse config to args.config
+    args = parser.parse_args()
+    cdr_data = CDRData()
+    config = Config(args.config)
+    extract_mapping_data(config, cdr_data)
+    vs = CDRVisualizer(config, cdr_data)
+
+    ### if you don't want any of these to be executed, you can comment it
+    # user section here, 
+    #ex.
+    # vs.calculate_data_statistics() << COMMENT HERE  
+    vs.calculate_daily_statistic()
+    vs.calculate_monthly_statistic()
+    #
+    vs.calculate_zone_population()
+    vs.calculate_user_date_histogram()
+    vs.calculate_summary()
+    # vs.calculate_od()
+    print('Overall time elapsed: {} seconds'.format(format_two_point_time(start, time.time())))
+```
+**cdr_visualizer.py in \__init\__**
+If you dont want tables to be created again (maybe after some errors but tables created), you can comment it in **\__init\__** function
+
+```
+    def __init__(self, config, data):
+        self.__dict__ = config.__dict__
+        self.hive = HiveConnector(config)
+        timer = time.time()
+        print('########## Initilizing Hive ##########')
+        self.hive.initialize(config)
+        print('########## Done. Time elapsed: {} seconds ##########'.format(hp.format_two_point_time(timer, time.time())))
+        timer = time.time()
+        print('########## Creating Tables ##########')
+        #self.hive.create_tables(config, data) <<<< COMMENT HERE
+        print('########## Done create all tables. Time elapsed: {} seconds ##########'.format(hp.format_two_point_time(timer, time.time())))
+```
+**cdr_visualizer.py in calculate_summary()**
+You may want to comment some function after calculating the summary.
+if you don't want some graphs to be outputted.
+At the bottom of the function
+```
+timer = time.time()
+
+        # self.daily_cdrs(total_records) <<<< COMMENT HERE
+
+        self.daily_unique_users(total_uids)
+
+        self.daily_unique_locations(total_unique_locations)
+
+        self.daily_average_cdrs()
+
+        self.daily_unique_average_locations()
+        print('########## FINISHED CALCULATING SUMMARY ##########')
+```
 
 ## License
 Free to use and distribute with acknowledgement.

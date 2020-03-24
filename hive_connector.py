@@ -1,5 +1,5 @@
 from impala.dbapi import connect
-from helper import json_file_to_object, get_admin_units_from_mapping
+from helper import json_file_to_object, get_admin_units_from_mapping, format_two_point_time
 import os
 import time
 
@@ -12,10 +12,10 @@ class HiveConnector:
     def initialize(self, config):
         for command in json_file_to_object('initial_hive_commands.json')['hive_commands']:
             self.cursor.execute(command)
-        if not os.path.exists(config.csv_location):
-            os.makedirs(config.csv_location)
-        if not os.path.exists(config.graph_location):
-            os.makedirs(config.graph_location)
+        if not os.path.exists(config.output_report_location):
+            os.makedirs(config.output_report_location)
+        if not os.path.exists(config.output_graph_location):
+            os.makedirs(config.output_graph_location)
 
     def create_tables(self, config, data):
         self.import_cell_tower_data_raw(config, data)
@@ -39,11 +39,12 @@ class HiveConnector:
         # self.create_od_sum()
 
     def import_cell_tower_data_raw(self, config, data):
+        print('########## IMPORT RAW MAPPING TABLE ##########')
         print('Checking and dropping raw mapping table if existing.')
         timer = time.time()
         self.cursor.execute('DROP TABLE IF EXISTS {provider_prefix}_cell_tower_data_raw'
                             .format(provider_prefix=config.provider_prefix))
-        print('Checked and dropped raw mapping table if existing. Elapsed time: {} seconds'.format(time.time() - timer))
+        print('Checked and dropped raw mapping table if existing. Elapsed time: {} seconds'.format(format_two_point_time(timer, time.time())))
         timer = time.time()
         print('Creating raw mapping table')
         self.cursor.execute('CREATE TABLE {provider_prefix}_cell_tower_data_raw'
@@ -54,7 +55,7 @@ class HiveConnector:
                             "LINES TERMINATED BY '\n' " +
                             "STORED AS TEXTFILE " +
                             'tblproperties ("skip.header.line.count"="1")')
-        print('Created raw mapping table. Elapsed time: {} seconds'.format(time.time() - timer))
+        print('Created raw mapping table. Elapsed time: {} seconds'.format(format_two_point_time(timer, time.time())))
         timer = time.time()
         # TODO string delimiter double quote is not checked yet (ask Ajarn.May)
         if len(config.input_cell_tower_files) < 1:
@@ -80,14 +81,16 @@ class HiveConnector:
                     .format(hadoop_data_path=config.hadoop_data_path, hadoop_data_file=config.input_cell_tower_files[i]) +
                     "into table {provider_prefix}_cell_tower_data_raw".format(provider_prefix=config.provider_prefix)
                 )
-        print('Imported to raw mapping table. Elapsed time: {} seconds'.format(time.time() - timer))
+        print('Imported to raw mapping table. Elapsed time: {} seconds'.format(format_two_point_time(timer, time.time())))
+        print('########## FINISHED IMPORTING TO RAW MAPPING TABLE ##########')
 
     def import_raw(self, config, data):
+        print('########## IMPORT RAW TABLE ##########')
         print('Checking and dropping raw table if existing.')
         timer = time.time()
         self.cursor.execute('DROP TABLE IF EXISTS {provider_prefix}_raw'
                             .format(provider_prefix=config.provider_prefix))
-        print('Checked and dropped raw mapping table if existing. Elapsed time: {} seconds'.format(time.time() - timer))
+        print('Checked and dropped raw mapping table if existing. Elapsed time: {} seconds'.format(format_two_point_time(timer, time.time())))
         timer = time.time()
         print('Creating raw table')
         self.cursor.execute('CREATE TABLE {provider_prefix}_raw'
@@ -99,7 +102,7 @@ class HiveConnector:
                             "STORED AS TEXTFILE " +
                             'tblproperties ("skip.header.line.count"="{cell_tower_header}")'
                             .format(cell_tower_header=config.input_cell_tower_have_header))
-        print('Created raw table. Elapsed time: {} seconds'.format(time.time() - timer))
+        print('Created raw table. Elapsed time: {} seconds'.format(format_two_point_time(timer, time.time())))
         timer = time.time()
         print('Importing to raw table')
         if len(config.input_files) < 1:
@@ -123,9 +126,11 @@ class HiveConnector:
                     .format(hadoop_data_path=config.hadoop_data_path, hadoop_data_file=config.input_files[i]) +
                     "into table {provider_prefix}_raw".format(provider_prefix=config.provider_prefix)
                 )
-        print('Imported to raw table. Elapsed time: {} seconds'.format(time.time() - timer))
+        print('Imported to raw table. Elapsed time: {} seconds'.format(format_two_point_time(timer, time.time())))
+        print('########## IMPORT RAW TABLE COMPLETED ##########')
         
     def cell_tower_data_admin(self, config, admin):
+        print('########## CREATE MAPPING ADMIN TABLE ##########')
         if config.check_invalid_lat_lng:
             check_lat_lng = 'and (latitude != 0 or longitude != 0) and latitude is not NULL and longitude is not NULL'
         else:
@@ -134,7 +139,7 @@ class HiveConnector:
         timer = time.time()
         self.cursor.execute('DROP TABLE IF EXISTS {provider_prefix}_cell_tower_data_{admin}'.format(
             provider_prefix=config.provider_prefix, admin=admin))
-        print('Check and drop mapping {admin} table if existing. Elapsed time: {time} seconds'.format(admin=admin, time=time.time() - timer))
+        print('Check and drop mapping {admin} table if existing. Elapsed time: {time} seconds'.format(admin=admin, time=format_two_point_time(timer, time.time())))
         timer = time.time()
         print('Creating mapping {admin} table'.format(admin=admin))
         self.cursor.execute('CREATE TABLE IF NOT EXISTS {provider_prefix}_cell_tower_data_{admin} '.format(
@@ -144,7 +149,7 @@ class HiveConnector:
                             "FIELDS TERMINATED BY ',' " +
                             "LINES TERMINATED BY '\n' " +
                             'STORED AS SEQUENCEFILE')
-        print('Created mapping {admin} table. Elapsed time: {time} seconds'.format(admin=admin, time=time.time() - timer))
+        print('Created mapping {admin} table. Elapsed time: {time} seconds'.format(admin=admin, time=format_two_point_time(timer, time.time())))
         timer = time.time()
 
         print('Inserting into mapping {} table'.format(admin))
@@ -155,9 +160,11 @@ class HiveConnector:
                             "group by {admin}, latitude, longitude order by rowidx" \
                             .format(provider_prefix=config.provider_prefix, admin=admin, check_lat_lng=check_lat_lng)
         self.cursor.execute(insert_query)
-        print('Inserted into mapping {admin} table. Elapsed time: {time} seconds'.format(admin=admin, time=time.time() - timer))
+        print('Inserted into mapping {admin} table. Elapsed time: {time} seconds'.format(admin=admin, time=format_two_point_time(timer, time.time())))
+        print('########## FINISHED CREATING MAPPING ADMIN TABLE ##########')
 
     def preprocess_cell_tower_data(self, config, data):
+        print('########## CREATE PREPROCESS MAPPING TABLE ##########')
         if config.check_duplicate:
             distinct = 'distinct'
         else:
@@ -168,7 +175,7 @@ class HiveConnector:
         self.cursor.execute('DROP TABLE IF EXISTS {provider_prefix}_cell_tower_data_preprocess'.format(
             provider_prefix=config.provider_prefix))
         print('Checked and dropped preprocess mapping table if existing. Elapsed time: {} seconds'.format(
-            time.time() - timer))
+            format_two_point_time(timer, time.time())))
         timer = time.time()
 
         print('Creating preprocess mapping table')
@@ -179,7 +186,7 @@ class HiveConnector:
                             "FIELDS TERMINATED BY ',' " +
                             "LINES TERMINATED BY '\n' " +
                             'STORED AS SEQUENCEFILE')
-        print('Created mapping preprocess table. Elapsed time: {} seconds'.format(time.time() - timer))
+        print('Created mapping preprocess table. Elapsed time: {} seconds'.format(format_two_point_time(timer, time.time())))
         timer = time.time()
         # need username to get privilege
         print('Inserting into preprocess mapping table')
@@ -188,9 +195,11 @@ class HiveConnector:
                             "select {distinct} {arg} ".format(distinct=distinct, arg=', '.join(data.arg_cell_map)) +
                             "from {provider_prefix}_cell_tower_data_raw"
                             .format(provider_prefix=config.provider_prefix))
-        print('Inserted into preprocess mapping table. Elapsed time: {} seconds'.format(time.time() - timer))
+        print('Inserted into preprocess mapping table. Elapsed time: {} seconds'.format(format_two_point_time(timer, time.time())))
+        print('########## FINISHED CREATING PREPROCESS MAPPING TABLE ##########')
 
     def preprocess_data(self, config, data):
+        print('########## CREATE PREPROCESS CDR TABLE ##########')
         if config.check_duplicate:
             distinct = 'distinct'
         else:
@@ -200,7 +209,7 @@ class HiveConnector:
         timer = time.time()
         self.cursor.execute('DROP TABLE IF EXISTS {provider_prefix}_preprocess'.format(provider_prefix=config.provider_prefix))
         print('Checked and dropped preprocess cdr table if existing. Elapsed time: {} seconds'.format(
-            time.time() - timer))
+            format_two_point_time(timer, time.time())))
         timer = time.time()
 
         print('Creating preprocess cdr table.')
@@ -209,7 +218,7 @@ class HiveConnector:
                     "FIELDS TERMINATED BY ',' " \
                     "LINES TERMINATED BY '\n' " \
                     "STORED AS SEQUENCEFILE".format(args=', '.join(data.arg_cdr_prep), provider_prefix=config.provider_prefix)
-        print('Created preprocess cdr table. Elapsed time: {} seconds'.format(time.time() - timer))
+        print('Created preprocess cdr table. Elapsed time: {} seconds'.format(format_two_point_time(timer, time.time())))
         timer = time.time()
         self.cursor.execute(create_q)
 
@@ -219,15 +228,17 @@ class HiveConnector:
                    "select {distinct} {arg} from {provider_prefix}_raw "\
             .format(distinct=distinct, arg=', '.join(data.arg_cdr_map), provider_prefix=config.provider_prefix)
         self.cursor.execute(insert_q)
-        print('Inserted into preprocess cdr table. Elapsed time: {} seconds'.format(time.time() - timer))
+        print('Inserted into preprocess cdr table. Elapsed time: {} seconds'.format(format_two_point_time(timer, time.time())))
+        print('########## FINISHED CREATING PREPROCESS CDR TABLE ##########')
 
     def consolidate_table(self, config, data):
+        print('########## CREATE CONSOLIDATE CDR TABLE ##########')
         print('Checking and dropping consolidate cdr table if existing.')
         timer = time.time()
         self.cursor.execute('DROP TABLE IF EXISTS {provider_prefix}_consolidate_data_all'.format(
             provider_prefix=config.provider_prefix))
         print('Checked and dropped preprocess cdr table if existing. Elapsed time: {} seconds'.format(
-            time.time() - timer))
+            format_two_point_time(timer, time.time())))
         timer = time.time()
         print('Creating consolidate table')
         create_query = "CREATE TABLE {provider_prefix}_consolidate_data_all".format(
@@ -238,7 +249,7 @@ class HiveConnector:
                        "FIELDS TERMINATED BY ','" + \
                        "LINES TERMINATED BY '\n'" + \
                        'STORED AS SEQUENCEFILE'
-        print('Created consolidate cdr table. Elapsed time: {} seconds'.format(time.time() - timer))
+        print('Created consolidate cdr table. Elapsed time: {} seconds'.format(format_two_point_time(timer, time.time())))
         timer = time.time()
         self.cursor.execute(create_query)
         print('Columns in consolidatie table: ' + ', '.join(data.arg_cdr_con))
@@ -249,15 +260,17 @@ class HiveConnector:
                        "to_date(call_time) as pdt " + \
                        "from {provider_prefix}_preprocess".format(provider_prefix=config.provider_prefix)
         self.cursor.execute(insert_query)
-        print('Inserted into consolidate cdr table. Elapsed time: {} seconds'.format(time.time() - timer))
+        print('Inserted into consolidate cdr table. Elapsed time: {} seconds'.format(format_two_point_time(timer, time.time())))
+        print('########## FINISHED CREATING CONSOLIDATE CDR TABLE ##########')
 
     def frequent_location(self, config):
+        print('########## CREATE FREQUENT LOCATION TABLE ##########')
         print('Checking and dropping frequent location table if existing.')
         timer = time.time()
         admin = config.od_admin_unit
         self.cursor.execute('DROP TABLE IF EXISTS {provider_prefix}_frequent_location'.format(provider_prefix=config.provider_prefix))
         print('Checked and dropped frequent location table if existing. Elapsed time: {} seconds'.format(
-            time.time() - timer))
+            format_two_point_time(timer, time.time())))
         timer = time.time()
         print('Creating frequent location table')
         query = "CREATE TABLE {provider_prefix}_frequent_location  (uid string, cell_id string,tcount int,trank int,ppercent double, " \
@@ -267,7 +280,7 @@ class HiveConnector:
             .format(provider_prefix=config.provider_prefix, admin_params=admin + '_id string')
 
         self.cursor.execute(query)
-        print('Created frequent location table. Elapsed time: {} seconds'.format(time.time() - timer))
+        print('Created frequent location table. Elapsed time: {} seconds'.format(format_two_point_time(timer, time.time())))
         timer = time.time()
         print('Inserting into frequent location table')
         query = "INSERT INTO TABLE {provider_prefix}_frequent_location SELECT a1.uid, a2.cell_id, " \
@@ -282,15 +295,17 @@ class HiveConnector:
 
         self.cursor.execute(query)
         print('Inserted into frequent location table.\nResult are in the table named {provider_prefix}_frequent_location\nElapsed time: {time} seconds. '
-              .format(provider_prefix=config.provider_prefix, time=time.time() - timer))
+              .format(provider_prefix=config.provider_prefix, time=format_two_point_time(timer, time.time())))
+        print('########## FINISHED CREATING FREQUENT LOCATION TABLE ##########')
 
     def frequent_location_night(self, config):
+        print('########## CREATE FREQUENT LOCATION NIGHT TABLE ##########')
         print('Checking and dropping frequent location night table if existing.')
         timer = time.time()
         admin = config.od_admin_unit
         self.cursor.execute('DROP TABLE IF EXISTS {provider_prefix}_frequent_location_night'.format(provider_prefix=config.provider_prefix))
         print('Checked and dropped frequent location night table if existing. Elapsed time: {} seconds'.format(
-            time.time() - timer))
+            format_two_point_time(timer, time.time())))
         timer = time.time()
         print('Creating frequent location night table')
         query = "CREATE TABLE {provider_prefix}_frequent_location_night  (uid string, cell_id string,tcount int,trank int,ppercent double, " \
@@ -300,7 +315,7 @@ class HiveConnector:
             .format(provider_prefix=config.provider_prefix, admin_params=admin + '_id string')
 
         self.cursor.execute(query)
-        print('Created frequent location night table. Elapsed time: {} seconds'.format(time.time() - timer))
+        print('Created frequent location night table. Elapsed time: {} seconds'.format(format_two_point_time(timer, time.time())))
         timer = time.time()
         print('Inserting into frequent location night table')
         query = "INSERT INTO TABLE {provider_prefix}_frequent_location SELECT a1.uid, a2.cell_id, " \
@@ -315,16 +330,18 @@ class HiveConnector:
 
         self.cursor.execute(query)
         print('Inserted into frequent location night table.\nResult are in the table named {provider_prefix}_frequent_location_night\nElapsed time: {time} seconds. '
-              .format(provider_prefix=config.provider_prefix, time=time.time() - timer))
+              .format(provider_prefix=config.provider_prefix, time=format_two_point_time(timer, time.time())))
+        print('########## FINISHED CREATING FREQUENT LOCATION NIGHT TABLE ##########')
 
     def rank1_frequent_location(self, config):
+        print('########## CREATE RANK 1 FREQUENT LOCATION TABLE ##########')
         admin = config.od_admin_unit
         create_param = admin + '_id string'
         timer = time.time()
         print('Checking and dropping rank 1 frequent location table if existing.')
         self.cursor.execute('DROP TABLE IF EXISTS {provider_prefix}_la_cdr_uid_home'.format(provider_prefix=config.provider_prefix))
         print('Checked and dropped rank 1 frequent location table if existing. Elapsed time: {} seconds'.format(
-            time.time() - timer))
+            format_two_point_time(timer, time.time())))
         timer = time.time()
         print('Creating rank 1 frequent location table')
         query = "CREATE TABLE {provider_prefix}_la_cdr_uid_home  (uid string, cell_id string, tcount " \
@@ -333,22 +350,24 @@ class HiveConnector:
                 "MAP KEYS TERMINATED BY '!' LINES TERMINATED BY '\n' STORED AS SEQUENCEFILE " \
             .format(provider_prefix=config.provider_prefix, admin_params=create_param)
         self.cursor.execute(query)
-        print('Created rank 1 frequent location table. Elapsed time: {} seconds'.format(time.time() - timer))
+        print('Created rank 1 frequent location table. Elapsed time: {} seconds'.format(format_two_point_time(timer, time.time())))
         timer = time.time()
         print('Inserting into rank 1 frequent location table')
         insert_q = "INSERT OVERWRITE TABLE  {provider_prefix}_la_cdr_uid_home  " \
                     "SELECT * FROM {provider_prefix}_frequent_location where trank = 1" \
                     .format(provider_prefix=config.provider_prefix)
         self.cursor.execute(insert_q)
-        print('Inserted into rank 1 frequent location table. Elapsed time: {} seconds'.format(time.time() - timer))
+        print('Inserted into rank 1 frequent location table. Elapsed time: {} seconds'.format(format_two_point_time(timer, time.time())))
+        print('########## FINISHED CREATING RANK 1 FREQUENT LOCATION TABLE ##########')
 
     def cdr_by_uid(self, config):
+        print('########## CREATE CDR BY UID TABLE ##########')
         timer = time.time()
         print('Checking and dropping {provider_prefix}_la_cdr_all_with_ant_zone_by_uid table if existing.'
               .format(provider_prefix=config.provider_prefix))
         self.cursor.execute('DROP TABLE IF EXISTS la_cdr_all_with_ant_zone_by_uid')
         print('Checked and dropped {provider_prefix}_la_cdr_all_with_ant_zone_by_uid table if existing. Elapsed time: {time} seconds'
-            .format(provider_prefix=config.provider_prefix, time=time.time() - timer))
+            .format(provider_prefix=config.provider_prefix, time=format_two_point_time(timer, time.time())))
         timer = time.time()
         print('Creating {provider_prefix}_la_cdr_all_with_ant_zone_by_uid table'.format(provider_prefix=config.provider_prefix))
 
@@ -358,7 +377,7 @@ class HiveConnector:
         self.cursor.execute(query)
 
         print('Created {provider_prefix}_la_cdr_all_with_ant_zone_by_uid table. Elapsed time: {time} seconds'
-              .format(provider_prefix=config.provider_prefix, time=time.time() - timer))
+              .format(provider_prefix=config.provider_prefix, time=format_two_point_time(timer, time.time())))
         timer = time.time()
 
         print('Inserting into {provider_prefix}_la_cdr_all_with_ant_zone_by_uid table'.format(provider_prefix=config.provider_prefix))
@@ -372,9 +391,11 @@ class HiveConnector:
 
         self.cursor.execute(insert_q)
         print('Inserted into {provider_prefix}_la_cdr_all_with_ant_zone_by_uid table. Elapsed time: {time} seconds'
-              .format(provider_prefix=config.provider_prefix, time=time.time() - timer))
+              .format(provider_prefix=config.provider_prefix, time=format_two_point_time(timer, time.time())))
+        print('########## FINISHED CREATING CDR BY UID TABLE ##########')
 
     def create_od(self, config):
+        print('########## CREATE OD TABLE ##########')
         timer = time.time()
         print('Checking and dropping {provider_prefix}_la_cdr_all_with_ant_zone_by_uid table if existing.'
               .format(provider_prefix=config.provider_prefix))
@@ -382,7 +403,7 @@ class HiveConnector:
                             .format(provider_prefix=config.provider_prefix))
 
         print('Checked and dropped  {provider_prefix}_la_cdr_all_with_ant_zone_by_uid table if existing. Elapsed time: {} seconds'
-            .format(provider_prefix=config.provider_prefix, time=time.time() - timer))
+            .format(provider_prefix=config.provider_prefix, time=format_two_point_time(timer, time.time())))
         timer = time.time()
 
         print('Creating {provider_prefix}_la_cdr_all_with_ant_zone_by_uid_od table'.format(
@@ -408,9 +429,11 @@ class HiveConnector:
                     .format(provider_prefix=config.provider_prefix, target_unit=config.od_admin_unit)
         self.cursor.execute(insert_q)
         print('Inserted into {provider_prefix}_la_cdr_all_with_ant_zone_by_uid_od table. Elapsed time: {time} seconds'
-              .format(provider_prefix=config.provider_prefix, time=time.time() - timer))
+              .format(provider_prefix=config.provider_prefix, time=format_two_point_time(timer, time.time())))
+        print('########## FINISHED CREATING OD TABLE ##########')
 
     def create_od_detail(self, config):
+        print('########## CREATING OD DETAIL TABLE ##########')
         timer = time.time()
         print('Checking and dropping {provider_prefix}_la_cdr_all_with_ant_zone_by_uid_od_detail table if existing.'
               .format(provider_prefix=config.provider_prefix))
@@ -418,7 +441,7 @@ class HiveConnector:
                             .format(provider_prefix=config.provider_prefix))
 
         print('Checked and dropped {provider_prefix}_la_cdr_all_with_ant_zone_by_uid_od_detail table if existing. Elapsed time: {} seconds'
-            .format(provider_prefix=config.provider_prefix, time=time.time() - timer))
+            .format(provider_prefix=config.provider_prefix, time=format_two_point_time(timer, time.time())))
         timer = time.time()
         print('Creating {provider_prefix}_la_cdr_all_with_ant_zone_by_uid_od_detail table'.format(
             provider_prefix=config.provider_prefix))
@@ -440,9 +463,11 @@ class HiveConnector:
                    "LATERAL VIEW explode(t1.arr) myTable1 AS m".format(provider_prefix=config.provider_prefix)
         self.cursor.execute(insert_q)
         print('Inserted into {provider_prefix}_la_cdr_all_with_ant_zone_by_uid_od_detail table. Elapsed time: {time} seconds'
-              .format(provider_prefix=config.provider_prefix, time=time.time() - timer))
+              .format(provider_prefix=config.provider_prefix, time=format_two_point_time(timer, time.time())))
+        print('########## CREATING OD DETAIL TABLE ##########')
 
     def create_od_sum(self, config):
+        print('########## CREATING OD SUM TABLE ##########')
         timer = time.time()
         print('Checking and dropping {provider_prefix}_la_cdr_all_with_ant_zone_by_uid_od_sum table if existing.'
               .format(provider_prefix=config.provider_prefix))
@@ -450,7 +475,7 @@ class HiveConnector:
                             .format(provider_prefix=config.provider_prefix))
         print(
             'Checked and dropped {provider_prefix}_la_cdr_all_with_ant_zone_by_uid_od_sum table if existing. Elapsed time: {} seconds'
-            .format(provider_prefix=config.provider_prefix, time=time.time() - timer))
+            .format(provider_prefix=config.provider_prefix, time=format_two_point_time(timer, time.time())))
         timer = time.time()
         print('Creating {provider_prefix}_la_cdr_all_with_ant_zone_by_uid_od_sum table'.format(
             provider_prefix=config.provider_prefix))
@@ -471,7 +496,7 @@ class HiveConnector:
                    "group by pdt,arr[2],arr[3]".format(provider_prefix=config.provider_prefix)
         self.cursor.execute(insert_q)
         print('Inserted into {provider_prefix}_la_cdr_all_with_ant_zone_by_uid_od_sum table. Elapsed time: {time} seconds'
-              .format(provider_prefix=config.provider_prefix, time=time.time() - timer))
+              .format(provider_prefix=config.provider_prefix, time=format_two_point_time(timer, time.time())))
 
         self.cursor.execute("insert overwrite local directory '/tmp/hive/csv/la_cdr_all_with_ant_zone_by_uid_od_sum.csv' select CONCAT_WS('\t',pdt,origin ,"
                             "destination,cast(tcount as string),cast(tusercount as string)) "
@@ -481,3 +506,4 @@ class HiveConnector:
 
         #select *,sum(ppercent) over (partition by uid order by trank asc)
         # as acc_wsum from big5_frequent_location order by uid, trank limit 100;
+        print('########## FINISHED CREATING OD SUM TABLE ##########')

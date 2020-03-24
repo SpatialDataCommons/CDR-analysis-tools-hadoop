@@ -12,18 +12,17 @@ months = {1: 'January', 2: 'February', 3: 'March', 4: 'April', 5: 'May', 6: 'Jun
 
 
 class CDRVisualizer:
-    # TODO paramiterize the query
     def __init__(self, config, data):
         self.__dict__ = config.__dict__
         self.hive = HiveConnector(config)
         timer = time.time()
-        print('Initilizing Hive')
+        print('########## Initilizing Hive ##########')
         self.hive.initialize(config)
-        print('Done. Time elapsed: {} seconds'.format(time.time() - timer))
+        print('########## Done. Time elapsed: {} seconds ##########'.format(hp.format_two_point_time(timer, time.time())))
         timer = time.time()
-        print('Creating Tables')
-        self.hive.create_tables(config, data)
-        print('Done create all tables. Time elapsed: {} seconds'.format(time.time() - timer))
+        print('########## Creating Tables ##########')
+        # self.hive.create_tables(config, data)
+        print('########## Done create all tables. Time elapsed: {} seconds ##########'.format(hp.format_two_point_time(timer, time.time())))
 
     def calculate_data_statistics(self):
         disable = False
@@ -36,6 +35,7 @@ class CDRVisualizer:
                 disable = True
 
         if not disable:
+            print('########## CALCULATING DATA STATISTICS ##########')
             cursor = self.hive.cursor
             imei = "count(distinct IMEI) as unique_imei, "
             imsi = "count(distinct IMSI) as unique_imsi, "
@@ -57,43 +57,47 @@ class CDRVisualizer:
             print('Calculating data statistics')
             timer = time.time()
             cursor.execute(query)
-            print('Calculated data statistics. Elasped time: {} seconds'.format(time.time()-timer))
-            print('Writing to {}/css_file_data_stat.csv'.format(self.csv_location))
+            print('Calculated data statistics. Elasped time: {} seconds'.format(hp.format_two_point_time(timer, time.time())))
+            print('Writing to {}/css_file_data_stat.csv'.format(self.output_report_location))
             timer = time.time()
-            with open("{}/css_file_data_stat.csv".format(self.csv_location), "w", newline='') as outfile:
+            with open("{}/css_file_data_stat.csv".format(self.output_report_location), "w", newline='') as outfile:
                 writer = csv.writer(outfile, quoting=csv.QUOTE_NONNUMERIC)
                 writer.writerow(col[0] for col in cursor.description)
                 for row in cursor:
                     writer.writerow(row)
-            print('Successfully wrote to {}/css_file_data_stat.csv'.format(self.csv_location))
-            print('Elapsed time: {} seconds'.format(time.time() - timer))
+            print('Successfully wrote to {}/css_file_data_stat.csv'.format(self.output_report_location))
+            print('Elapsed time: {} seconds'.format(hp.format_two_point_time(timer, time.time())))
+            print('########## FINISHED CALCULATING DATA STATISTICS ##########')
         else:
             print('Mapping for call_time, imsi, imei or uid is not sufficient. Ignored data statistic')
 
     def calculate_daily_statistic(self):
+        imei = "count(distinct IMEI) as unique_imei, "
+        imsi = "count(distinct IMSI) as unique_imsi, "
+        replicate = False
+
+        for map in self.cdr_data_layer:
+            if str.lower(map['input_name']) == 'imei' and str.lower(map['name']) == 'uid':
+                imei = ''
+                replicate = True
+            elif str.lower(map['input_name']) == 'imsi' and str.lower(map['name']) == 'uid':
+                imsi = ''
+                replicate = True
+        file_location = '{}/css_file_data_stat.csv'.format(self.output_report_location)
+        time_dict = hp.get_time_from_csv(file_location, replicate)
+        start_date, end_date = time_dict['start_date'], time_dict['end_date']
+
         disable = False
         for item in self.cdr_data_layer:
             if str.lower(item['name']) == 'network_type' and item['output_no'] == -1 \
                     or str.lower(item['name']) == 'call_type' and item['output_no'] == -1:
                 disable = True
         if not disable:
+            print('########## CALCULATING DAILY STATISTICS ##########')
             cursor = self.hive.cursor
-            cursor.set_arraysize(200)
+            cursor.set_arraysize(50)
             results = []
-            file_location = '{}/css_file_data_stat.csv'.format(self.csv_location)
-            imei = "count(distinct IMEI) as unique_imei, "
-            imsi = "count(distinct IMSI) as unique_imsi, "
-            replicate = False
-            for map in self.cdr_data_layer:
-                if str.lower(map['input_name']) == 'imei' and str.lower(map['name']) == 'uid':
-                    imei = ''
-                    replicate = True
-                elif str.lower(map['input_name']) == 'imsi' and str.lower(map['name']) == 'uid':
-                    imsi = ''
-                    replicate = True
 
-            time_dict = hp.get_time_from_csv(file_location, replicate)
-            start_date, end_date = time_dict['start_date'], time_dict['end_date']
             timer = time.time()
             print('Calculating Daily Statistics')
             # FOR CASE ALL
@@ -140,15 +144,16 @@ class CDRVisualizer:
                      "GROUP BY to_date(call_time), call_type, network_type ORDER BY date ASC, call_type ASC, network_type DESC"
 
             cursor.execute(query)
-            print('Query completed. Time elapsed: {} seconds.'.format(time.time() - timer))
+            print('Query completed. Time elapsed: {} seconds.'.format(hp.format_two_point_time(timer, time.time())))
             timer = time.time()
             description = cursor.description
             rows = []
+
             for row in cursor:
                 rows.append(row)
             results += rows
             print('Writing into the graph for daily statistics')
-            file_path = '{}/css_provider_data_stat_daily.csv'.format(self.csv_location)
+            file_path = '{}/css_provider_data_stat_daily.csv'.format(self.output_report_location)
             if os.path.exists(file_path):
                 os.remove(file_path)
 
@@ -158,79 +163,82 @@ class CDRVisualizer:
                 for row in results:
                     writer.writerow(row)
             print('Successfully wrote to file css_provider_data_stat_daily.csv')
+            print('########## FINISHED CALCULATING DAILY STATISTICS ##########')
+            print('########## Querying daily cdr by call_type ##########')
+
+            timer = time.time()
+            query = "SELECT to_date(call_time) as date, 'ALL' as call_type, 'ALL' as network_type, COUNT(*) as total_records, " + \
+                    "COUNT(DISTINCT TO_DATE(call_time)) as total_days, " + \
+                    'COUNT(DISTINCT uid) as unique_id, ' + \
+                    imei + imsi + \
+                    'COUNT(DISTINCT cell_id) as unique_location_name ' + \
+                    "FROM {provider_prefix}_consolidate_data_all where to_date(pdt) between to_date('{start_date}') and to_date('{end_date}') " \
+                        .format(provider_prefix=self.provider_prefix, start_date=start_date, end_date=end_date) + \
+                    "GROUP BY to_date(call_time)"
+            query += ' UNION '
+
+            query += "SELECT to_date(call_time) as date, call_type, 'ALL' as network_type, COUNT(*) as total_records, " + \
+                     "COUNT(DISTINCT TO_DATE(call_time)) as total_days, " + \
+                     'COUNT(DISTINCT uid) as unique_id, ' + \
+                     imei + imsi + \
+                     'COUNT(DISTINCT cell_id) as unique_location_name ' + \
+                     "FROM {provider_prefix}_consolidate_data_all where to_date(pdt) between to_date('{start_date}') and to_date('{end_date}') " \
+                         .format(provider_prefix=self.provider_prefix, start_date=start_date, end_date=end_date) + \
+                     "GROUP BY to_date(call_time), call_type ORDER BY  call_type ASC, network_type DESC"
+            cursor.execute(query)
+            print('Query completed. Time elapsed: {} seconds.'.format(hp.format_two_point_time(timer, time.time())))
+            rows = []
+            xs_all = set([])
+            ys_all = []
+            ys_data = []
+            ys_voice_or_sms = []
+            for row in cursor:
+                rows.append(row)
+                xs_all.add(row[0])
+            xs_all = list(xs_all)
+            xs_all.sort(key=lambda date: datetime.strptime(date, '%Y-%m-%d'))
+            # find the day in rows and match, then extract ALL, DATA and VOICE/SMS
+            print('Writing into the graph for daily cdr by call type')
+            for day in xs_all:
+                c_all = 0
+                c_data = 0
+                c_sms_voice = 0
+                for row in rows:
+                    if row[0] == day:
+                        if row[1] == 'ALL':
+                            c_all += row[3]
+                        elif row[1] == 'DATA':
+                            c_data += row[3]
+                        elif row[1] in ['VOICE', 'SMS']:
+                            c_sms_voice += row[3]
+                ys_all.append(c_all)
+                ys_data.append(c_data)
+                ys_voice_or_sms.append(c_sms_voice)
+
+            figure = plt.figure(figsize=(14, 11))
+            font_dict = {
+                'fontsize': 21,
+                'fontweight': 'bold',
+            }
+
+            ax = figure.add_subplot(111)
+            plt.subplots_adjust(top=0.95)
+            plt.grid(b=True)
+            plt.plot(xs_all, ys_all)
+            plt.plot(xs_all, ys_data)
+            plt.plot(xs_all, ys_voice_or_sms)
+            plt.ylabel('Total Records')
+            plt.xticks(rotation=90)
+            plt.xlabel('Date')
+            plt.title('Daily CDR by call type', fontdict=font_dict)
+            plt.legend(['ALL', 'DATA', 'VOICE and SMS'], loc='upper left')
+            plt.savefig('{}/daily_cdr_by_call_type'.format(self.output_graph_location))
+            plt.clf()
+            print('Graph created successfully in {}/daily_cdr_by_call_type'.format(self.output_graph_location))
         else:
             print('Mapping for network_type or call_type is not sufficient. Ignored daily statistics')
 
-        # TODO output to a graph -> put in daily_cdr multiple lines
-        print('Querying daily cdr by call_type')
-        timer = time.time()
-        query = "SELECT to_date(call_time) as date, 'ALL' as call_type, 'ALL' as network_type, COUNT(*) as total_records, " + \
-                "COUNT(DISTINCT TO_DATE(call_time)) as total_days, " + \
-                'COUNT(DISTINCT uid) as unique_id, ' + \
-                imei + imsi + \
-                'COUNT(DISTINCT cell_id) as unique_location_name ' + \
-                "FROM {provider_prefix}_consolidate_data_all where to_date(pdt) between to_date('{start_date}') and to_date('{end_date}') " \
-                    .format(provider_prefix=self.provider_prefix, start_date=start_date, end_date=end_date) + \
-                "GROUP BY to_date(call_time)"
-        query += ' UNION '
 
-        query += "SELECT to_date(call_time) as date, call_type, 'ALL' as network_type, COUNT(*) as total_records, " + \
-                 "COUNT(DISTINCT TO_DATE(call_time)) as total_days, " + \
-                 'COUNT(DISTINCT uid) as unique_id, ' + \
-                 imei + imsi + \
-                 'COUNT(DISTINCT cell_id) as unique_location_name ' + \
-                 "FROM {provider_prefix}_consolidate_data_all where to_date(pdt) between to_date('{start_date}') and to_date('{end_date}') " \
-                     .format(provider_prefix=self.provider_prefix, start_date=start_date, end_date=end_date) + \
-                 "GROUP BY to_date(call_time), call_type ORDER BY  call_type ASC, network_type DESC"
-        cursor.execute(query)
-        print('Query completed. Time elapsed: {} seconds.'.format(time.time() - timer))
-        rows = []
-        xs_all = set([])
-        ys_all = []
-        ys_data = []
-        ys_voice_or_sms = []
-        for row in cursor:
-            rows.append(row)
-            xs_all.add(row[0])
-        xs_all = list(xs_all)
-        xs_all.sort(key=lambda date: datetime.strptime(date, '%Y-%m-%d'))
-        # find the day in rows and match, then extract ALL, DATA and VOICE/SMS
-        print('Writing into the graph for daily cdr by call type')
-        for day in xs_all:
-            c_all = 0
-            c_data = 0
-            c_sms_voice = 0
-            for row in rows:
-                if row[0] == day:
-                    if row[1] == 'ALL':
-                        c_all += row[3]
-                    elif row[1] == 'DATA':
-                        c_data += row[3]
-                    elif row[1] in ['VOICE', 'SMS']:
-                        c_sms_voice += row[3]
-            ys_all.append(c_all)
-            ys_data.append(c_data)
-            ys_voice_or_sms.append(c_sms_voice)
-
-        figure = plt.figure(figsize=(14, 11))
-        font_dict = {
-            'fontsize': 21,
-            'fontweight': 'bold',
-        }
-
-        ax = figure.add_subplot(111)
-        plt.subplots_adjust(top=0.95)
-        plt.grid(b=True)
-        plt.plot(xs_all, ys_all)
-        plt.plot(xs_all, ys_data)
-        plt.plot(xs_all, ys_voice_or_sms)
-        plt.ylabel('Total Records')
-        plt.xticks(rotation=90)
-        plt.xlabel('Date')
-        plt.title('Daily CDR by call type', fontdict=font_dict)
-        plt.legend(['ALL', 'DATA', 'VOICE and SMS'], loc='upper left')
-        plt.savefig('{}/daily_cdr_by_call_type'.format(self.graph_location))
-        print('Graph created successfully in {}/daily_cdr_by_call_type'.format(self.graph_location))
 
     def calculate_monthly_statistic(self):
         disable = False
@@ -239,9 +247,10 @@ class CDRVisualizer:
                     or str.lower(item['name']) == 'call_type' and item['output_no'] == -1:
                 disable = True
         if not disable:
+            print('########## CALCULATING MONTHLY STATISTICS ##########')
             cursor = self.hive.cursor
             results = []
-            file_location = '{}/css_file_data_stat.csv'.format(self.csv_location)
+            file_location = '{}/css_file_data_stat.csv'.format(self.output_report_location)
 
             imei = "count(distinct IMEI) as unique_imei, "
             imsi = "count(distinct IMSI) as unique_imsi, "
@@ -309,7 +318,7 @@ class CDRVisualizer:
             description = cursor.description
             results += cursor.fetchall()
 
-            file_path = '{}/css_provider_data_stat_monthly.csv'.format(self.csv_location)
+            file_path = '{}/css_provider_data_stat_monthly.csv'.format(self.output_report_location)
             if os.path.exists(file_path):
                 os.remove(file_path)
 
@@ -320,143 +329,12 @@ class CDRVisualizer:
                     writer.writerow(row)
 
             print('### Successfully wrote to file css_provider_data_stat_monthly.csv###')
-            # TODO output to a graph
+            print('########## CALCULATING MONTHLY STATISTICS ##########')
         else:
             print('Mapping for network_type or call_type is not sufficient. Ignored monthly statistics')
 
-    # def calculate_frequent_locations(self):
-    #     cursor = self.hive.cursor
-    #     # join by cell_id and get its admin unit
-    #     query = "SELECT * from {provider_prefix}_frequent_location order by uid, trank ASC".format(provider_prefix=self.provider_prefix)
-    #
-    #     cursor.execute(query)
-    #     print(query)
-    #
-    #     accumulate = 0
-    #     active_id = 0
-    #     if self.input_file_have_header == 1:
-    #         row_i = 1
-    #     else:
-    #         row_i = 0
-    #     description = cursor.description
-    #     print(description)
-    #     rows = []
-    #     for row in cursor:
-    #         rows.append(row)
-    #     print('FETCHED!')
-    #     while row_i < len(rows):
-    #         if rows[row_i][0] == active_id:
-    #             if accumulate < self.frequent_location_percentage:
-    #                 accumulate += rows[row_i][2]
-    #                 row_i += 1
-    #             else:
-    #                 del rows[row_i]
-    #         else:
-    #             accumulate = rows[row_i][2]
-    #             active_id = rows[row_i][0]
-    #             row_i += 1
-    #
-    #     file_path = '{}/frequent_locations.csv'.format(self.csv_location)
-    #     if os.path.exists(file_path):
-    #         os.remove(file_path)
-    #
-    #     with open(file_path, "w", newline='') as outfile:
-    #         writer = csv.writer(outfile, quoting=csv.QUOTE_NONNUMERIC)
-    #         writer.writerow(col[0] for col in description)
-    #         for row in rows:
-    #             writer.writerow(row)
-    #
-    # def calculate_frequent_locations_night(self):
-    #     cursor = self.hive.cursor
-    #     # join by cell_id and get its admin unit
-    #     query = "select a1.uid, count(a1.uid) as count, " + \
-    #             "count(a1.uid)/SUM(count(a1.uid)) OVER(partition by a1.uid) * 100 as percentage, " + \
-    #             "ROW_NUMBER() OVER(PARTITION BY a1.uid order by count(a1.uid) DESC) as rank" + \
-    #             ", concat(a2.latitude, ' : ', a2.longitude) as unique_location " + \
-    #             "from {provider_prefix}_consolidate_data_all a1 ".format(provider_prefix=self.provider_prefix) + \
-    #             "JOIN {provider_prefix}_cell_tower_data_preprocess a2 ".format(
-    #                 provider_prefix=self.provider_prefix) + \
-    #             "ON(a1.cell_id = a2.cell_id) group by a1.uid, " + \
-    #             "concat(a2.latitude, ' : ', a2.longitude) " + \
-    #             "order by a1.uid, count DESC "
-    #
-    #     cursor.execute(query)
-    #     accumulate = 0
-    #     active_id = 0
-    #     row_i = 1
-    #     description = cursor.description
-    #     rows = cursor.fetchall()
-    #     while row_i < len(rows):
-    #         if rows[row_i][0] == active_id:
-    #             if accumulate < self.frequent_location_percentage:
-    #                 accumulate += rows[row_i][2]
-    #                 row_i += 1
-    #             else:
-    #                 if rows[row_i][2] != rows[row_i - 1]:
-    #                     del rows[row_i]
-    #                 else:
-    #                     row_i += 1
-    #         else:
-    #             accumulate = rows[row_i][2]
-    #             active_id = rows[row_i][0]
-    #             row_i += 1
-    #
-    #     file_path = '{}/frequent_locations.csv'.format(self.csv_location)
-    #     if os.path.exists(file_path):
-    #         os.remove(file_path)
-    #
-    #     with open(file_path, "w", newline='') as outfile:
-    #         writer = csv.writer(outfile, quoting=csv.QUOTE_NONNUMERIC)
-    #         writer.writerow(col[0] for col in description)
-    #         for row in rows:
-    #             writer.writerow(row)
-    #
-    #
-    # def calculate_frequent_locations_day(self):
-    #     cursor = self.hive.cursor
-    #     query = "select a1.uid, count(a1.uid) as count, " + \
-    #             "count(a1.uid)/SUM(count(a1.uid)) OVER(partition by a1.uid) * 100 as percentage, " + \
-    #             "ROW_NUMBER() OVER(PARTITION BY a1.uid order by count(a1.uid) DESC) as rank" + \
-    #             ", concat(a2.latitude, ' : ', a2.longitude) as unique_location " + \
-    #             "from {provider_prefix}_consolidate_data_all a1 ".format(provider_prefix=self.provider_prefix) + \
-    #             "JOIN {provider_prefix}_cell_tower_data_preprocess a2 ".format(
-    #                 provider_prefix=self.provider_prefix) + \
-    #             "ON(a1.cell_id = a2.cell_id) group by a1.uid, " + \
-    #             "concat(a2.latitude, ' : ', a2.longitude) " + \
-    #             "order by a1.uid, count DESC "
-    #
-    #     cursor.execute(query)
-    #     accumulate = 0
-    #     active_id = 0
-    #     row_i = 1
-    #     description = cursor.description
-    #     rows = cursor.fetchall()
-    #     while row_i < len(rows):
-    #         if rows[row_i][0] == active_id:
-    #             if accumulate < self.frequent_location_percentage:
-    #                 accumulate += rows[row_i][2]
-    #                 row_i += 1
-    #             else:
-    #                 if rows[row_i][2] != rows[row_i - 1]:
-    #                     del rows[row_i]
-    #                 else:
-    #                     row_i += 1
-    #         else:
-    #             accumulate = rows[row_i][2]
-    #             active_id = rows[row_i][0]
-    #             row_i += 1
-    #
-    #     file_path = '{}/frequent_locations.csv'.format(self.csv_location)
-    #     if os.path.exists(file_path):
-    #         os.remove(file_path)
-    #
-    #     with open(file_path, "w", newline='') as outfile:
-    #         writer = csv.writer(outfile, quoting=csv.QUOTE_NONNUMERIC)
-    #         writer.writerow(col[0] for col in description)
-    #         for row in rows:
-    #             writer.writerow(row)
-
     def calculate_zone_population(self):
+        print('########## CALCULATING ZONE POPULATION STATISTICS ##########')
         cursor = self.hive.cursor
         admin_units = ['ADMIN0', 'ADMIN1', 'ADMIN2', 'ADMIN3', 'ADMIN4', 'ADMIN5']
         admin_units_active = []
@@ -489,22 +367,22 @@ class CDRVisualizer:
 
             cursor.execute(query)
             description = cursor.description
-            print('Successfully zone population for {admin}. Elapsed time: {time} seconds'.format(admin=admin_unit, time=time.time()-timer))
+            print('Successfully zone population for {admin}. Elapsed time: {time} seconds'.format(admin=admin_unit, time=hp.format_two_point_time(timer, time.time())))
             timer = time.time()
             rows = []
-            cursor.set_arraysize(200)
+            cursor.set_arraysize(50)
             for row in cursor:
                 rows.append(row)
 
-            file_path = '{csv_location}/zone_based_aggregations_level_{level}.csv'.format(
-                csv_location=self.csv_location, level=admin_unit)
+            file_path = '{output_report_location}/zone_based_aggregations_level_{level}.csv'.format(
+                output_report_location=self.output_report_location, level=admin_unit)
             if geo_jsons_active[geo_i] != '':
                 print('Merging dictionary object to geojson')
                 for f in range(0, len(geo_jsons_active[geo_i]['features'])):
 
                     if geo_jsons_active[geo_i]['features'][f]['properties'][name_columns[geo_i]] == 'Kochi Ken':
                         geo_jsons_active[geo_i]['features'][f]['properties']['num_population'] = 'Kochi Ken'
-                print('Merging completed. Time elapsed: {} seconds'.format(time.time() - timer))
+                print('Merging completed. Time elapsed: {} seconds'.format(hp.format_two_point_time(timer, time.time())))
                 timer = time.time()
             else:
                 print('No geojson file input')
@@ -518,17 +396,19 @@ class CDRVisualizer:
                 writer.writerow(col[0] for col in description)
                 for row in rows:
                     writer.writerow(row)
-            print('Writing completed. Time elapsed: {} seconds'.format(time.time() - timer))
+            print('Writing completed. Time elapsed: {} seconds'.format(hp.format_two_point_time(timer, time.time())))
             timer = time.time()
             print('Writing into geojson file ' + geo_json_filename[geo_i][:-4] + '_joined_' + admin_unit + '.json')
             if geo_json_filename[geo_i] != '':
-                with open(geo_json_filename[geo_i][:-4] + '_joined_' + admin_unit + '.json', "w",
+                with open('{}/'.format(self.output_report_location) + geo_json_filename[geo_i][:-4] + '_joined_' + admin_unit + '.json', "w",
                           newline='') as outfile:
                     json.dump(geo_jsons_active[geo_i], outfile)
-                print('Writing completed. Time elapsed: {} seconds'.format(time.time() - timer))
+                print('Writing completed. Time elapsed: {} seconds'.format(hp.format_two_point_time(timer, time.time())))
             geo_i += 1
+        print('########## FINISHED CALCULATING ZONE POPULATION STATISTICS ##########')
 
     def calculate_user_date_histogram(self):
+        print('########## CALCULATING USER DATE HISTOGRAM ##########')
         cursor = self.hive.cursor
 
         query = ("select explode(histogram_numeric(active_days, 10)) as active_day_bins from "
@@ -540,14 +420,15 @@ class CDRVisualizer:
                  "month(to_date(call_time)), "
                  "day(to_date(call_time)) order by year, month, day, uid) td "
                  "group by td.uid) td2".format(provider_prefix=self.provider_prefix))
+
         timer = time.time()
         print('Calculating data histogram')
         cursor.execute(query)
         description = cursor.description
         rows = cursor.fetchall()
-        print('Calculating completed. Time elapsed: {} seconds'.format(time.time() - timer))
+        print('Calculating completed. Time elapsed: {} seconds'.format(hp.format_two_point_time(timer, time.time())))
 
-        file_path = '{}/histogram.csv'.format(self.csv_location)
+        file_path = '{}/histogram.csv'.format(self.output_report_location)
         print('Writing into {}'.format(file_path))
         if os.path.exists(file_path):
             os.remove(file_path)
@@ -570,11 +451,13 @@ class CDRVisualizer:
         plt.bar(xs, ys, align='center')  # A bar chart
         plt.xlabel('Active Day Bins')
         plt.ylabel('Count No. Unique Ids')
-        print('Plotting graph and writing into {}/user_data_histogram.png'.format(self.graph_location))
-        plt.savefig('{}/user_data_histogram.png'.format(self.graph_location))
+        print('Plotting graph and writing into {}/user_data_histogram.png'.format(self.output_graph_location))
+        plt.savefig('{}/user_data_histogram.png'.format(self.output_graph_location))
         print('Done.')
+        print('########## CALCULATING USER DATE HISTOGRAM ##########')
 
     def calculate_summary(self):
+        print('########## CALCULATING SUMMARY ##########')
         cursor = self.hive.cursor
         tb_1_description = ('All Data', 'Value')
         tb_2_description = ('Statistics',)
@@ -590,7 +473,7 @@ class CDRVisualizer:
         output_1_rows.append(row_total_records)
         total_records = row_total_records[1]
         print('Successfully calculated total records. Total records: {recs} records \nElapsed time: {time} seconds'
-              .format(recs=total_records, time=time.time()-timer))
+              .format(recs=total_records, time=hp.format_two_point_time(timer, time.time())))
         timer = time.time()
         print('Calculating total unique uids')
         q_total_uids = 'select count(*) as total_uids from (select distinct uid from {provider_prefix}_consolidate_data_all) td'.format(
@@ -602,7 +485,7 @@ class CDRVisualizer:
         output_1_rows.append(row_total_uids)
         total_uids = row_total_uids[1]
         print('Successfully calculated total unique uids. Total unique ids: {ids} ids  \nElapsed time: {time} seconds'.format(
-            ids=total_uids,time=time.time()-timer))
+            ids=total_uids,time=hp.format_two_point_time(timer, time.time())))
         timer = time.time()
 
         print('Calculating total days')
@@ -657,32 +540,16 @@ class CDRVisualizer:
 
         output_1_rows.append(row_total_days)
         print('Successfully calculated total days. Total days: {days} \nElapsed time: {time} seconds'
-              .format(days=row_total_days[1], time=time.time()-timer))
+              .format(days=row_total_days[1], time=hp.format_two_point_time(timer, time.time())))
 
-        print('Calculating daily average location name')
-
-        q_total_locations = "select count(*) as count_unique_locations from (select distinct a2.latitude, a2.longitude from {provider_prefix}_consolidate_data_all a1 " \
-                            "join {provider_prefix}_cell_tower_data_preprocess a2 " \
-                            "on(a1.cell_id = a2.cell_id)) td".format(provider_prefix=self.provider_prefix)
-
-        cursor.execute(q_total_locations)
-        des = cursor.description
-        row_total_locations = cursor.fetchall()
-        row_total_locations = (des[0][0], row_total_locations[0][0])
-        output_1_rows.append(row_total_locations)
-        total_unique_locations = row_total_locations[1]
-        print('Successfully calculated daily average location name. Daily average location names : {locs} '
-              '\nElapsed time: {time} seconds'
-              .format(locs=row_total_locations[1], time=time.time() - timer))
-        timer = time.time()
         # average usage per day
         print('Calculating average daily usage')
         output_2_rows = []
-        row_avg_daily_usage = ('average_usage_per_day', float(total_records / total_days))
+        row_avg_daily_usage = ('average_usage_per_day', round(float(total_records / total_days), 2))
         output_2_rows.append(row_avg_daily_usage)
         print('Successfully calculated average daily usage. Daily average usages : {uses} '
               '\nElapsed time: {time} seconds'
-              .format(uses=row_avg_daily_usage[1], time=time.time() - timer))
+              .format(uses=row_avg_daily_usage[1], time=hp.format_two_point_time(timer, time.time())))
         timer = time.time()
         # avg voice call per day
 
@@ -693,17 +560,17 @@ class CDRVisualizer:
                 disable = True
 
         if not disable:
-            print('Calculating average daily voice call usage')
+            print('########## Calculating average daily voice call usage ##########')
             q_avg_daily_voice = "select count(*)/{total_records} as average_daily_voice from {provider_prefix}_consolidate_data_all where call_type = 'VOICE'".format(
                 provider_prefix=self.provider_prefix, total_records=total_records)
             cursor.execute(q_avg_daily_voice)
             des = cursor.description
             row_avg_daily_voice = cursor.fetchall()
-            row_avg_daily_voice = (des[0][0], row_avg_daily_voice[0][0])
+            row_avg_daily_voice = (des[0][0], round(row_avg_daily_voice[0][0], 2))
             output_2_rows.append(row_avg_daily_voice)
             print('Successfully calculated average daily voice call usage. Daily average sms usages : {uses} '
                   '\nElapsed time: {time} seconds'
-                  .format(uses=row_avg_daily_voice[1], time=time.time() - timer))
+                  .format(uses=row_avg_daily_voice[1], time=hp.format_two_point_time(timer, time.time())))
             timer = time.time()
             # avg sms per day
             print('Calculating average daily sms usage')
@@ -712,11 +579,11 @@ class CDRVisualizer:
             cursor.execute(q_avg_daily_sms)
             des = cursor.description
             row_avg_daily_sms = cursor.fetchall()
-            row_avg_daily_sms = (des[0][0], row_avg_daily_sms[0][0])
+            row_avg_daily_sms = (des[0][0], round(row_avg_daily_sms[0][0], 2))
             output_2_rows.append(row_avg_daily_sms)
-            print('Successfully calculated average daily sms usage. Daily average sms usages : {uses} '
-                  '\nElapsed time: {time} seconds'
-                  .format(uses=row_avg_daily_sms[1], time=time.time() - timer))
+            print('########## Successfully calculated average daily sms usage. Daily average sms usages : {uses} ##########'
+                  '\n########## Elapsed time: {time} seconds ##########'
+                  .format(uses=row_avg_daily_sms[1], time=hp.format_two_point_time(timer, time.time())))
             timer = time.time()
         else:
             print('call_type or network_type not completed. Ignored daily usage of sms and voice call')
@@ -736,12 +603,12 @@ class CDRVisualizer:
             cursor.execute(q_avg_daily_unique_cell_id)
             des = cursor.description
             row_avg_daily_unique_cell_id = cursor.fetchall()
-            row_avg_daily_unique_cell_id = (des[0][0], row_avg_daily_unique_cell_id[0][0])
+            row_avg_daily_unique_cell_id = (des[0][0], round(row_avg_daily_unique_cell_id[0][0], 2))
             output_2_rows.append(row_avg_daily_unique_cell_id)
             print('Successfully calculated average daily unique cell id')
             print('Successfully calculated average daily unique cel id.'
                   '\nElapsed time: {time} seconds'
-                  .format(time=time.time() - timer))
+                  .format(time=hp.format_two_point_time(timer, time.time())))
             timer = time.time()
 
             print('Calculating average daily district')
@@ -755,18 +622,18 @@ class CDRVisualizer:
             cursor.execute(q_avg_daily_district)
             des = cursor.description
             row_avg_daily_district = cursor.fetchall()
-            row_avg_daily_district = (des[0][0], row_avg_daily_district[0][0])
+            row_avg_daily_district = (des[0][0], round(row_avg_daily_district[0][0], 2))
             output_2_rows.append(row_avg_daily_district)
             print('Successfully calculated average daily district. Daily average districts : {dists} '
                   '\nElapsed time: {time} seconds'
-                  .format(dists=row_avg_daily_district[1], time=time.time() - timer))
+                  .format(dists=row_avg_daily_district[1], time=hp.format_two_point_time(timer, time.time())))
             timer = time.time()
 
         else:
             print('Skipped due to incomplete cell_id data')
 
         print('Recording to summary_stats')
-        with open("{}/summary_stats.csv".format(self.csv_location), "w", newline='') as outfile:
+        with open("{}/summary_stats.csv".format(self.output_report_location), "w", newline='') as outfile:
             writer = csv.writer(outfile, quoting=csv.QUOTE_NONNUMERIC)
             writer.writerow(tb_1_description)
             for row in output_1_rows:
@@ -780,20 +647,34 @@ class CDRVisualizer:
 
         print('Successfully wrote to summary_stats.csv'
               '\nElapsed time: {time} seconds'
-              .format(time=time.time() - timer))
+              .format(time=hp.format_two_point_time(timer, time.time())))
 
+        print('########## FINISHED CALCULATING SUMMARY ##########')
+
+    def daily_cdrs(self):
+        timer = time.time()
+        cursor = self.hive.cursor
+        print('########## Daily cdrs ##########')
+        print('Selecting date and total records')
+        q_total_records = 'select count(*) as total_records from {provider_prefix}_consolidate_data_all'.format(
+            provider_prefix=self.provider_prefix)
+        cursor.execute(q_total_records)
+        des = cursor.description
+        row_total_records = cursor.fetchall()
+        row_total_records = (des[0][0], row_total_records[0][0])
+        total_records = row_total_records[1]
+        print('Successfully calculated total records. Total records: {recs} records \nElapsed time: {time} seconds'
+              .format(recs=total_records, time=hp.format_two_point_time(timer, time.time())))
         timer = time.time()
 
-        print('Daily cdrs')
-        print('Selecting date and total records')
         q_total_daily_cdr = "select to_date(call_time) as date, " \
                             "count(*) as total_records from {provider_prefix}_consolidate_data_all group by " \
-                            "to_date(call_time)".format(provider_prefix=self.provider_prefix)
+                            "to_date(call_time) order by date".format(provider_prefix=self.provider_prefix)
         cursor.execute(q_total_daily_cdr)
         row_total_daily_cdr = cursor.fetchall()
         print('Query done'
               '\nElapsed time: {time} seconds'
-              .format(time=time.time() - timer))
+              .format(time=hp.format_two_point_time(timer, time.time())))
         timer = time.time()
         total_daily_cdr_x = []
         total_daily_cdr_y = []
@@ -812,29 +693,42 @@ class CDRVisualizer:
                                                       row_total_daily_cdr_all[0][2]
         print('Done.'
               '\nElapsed time: {time} seconds'
-              .format(time=time.time() - timer))
+              .format(time=hp.format_two_point_time(timer, time.time())))
         print('Writing into the graph for daily cdrs')
         hp.make_graph(total_daily_cdr_x, 'Day', total_daily_cdr_y, 'Total Records', 'Daily CDRs',
-                      '{}/daily_cdrs'.format(self.graph_location),
+                      '{}/daily_cdrs'.format(self.output_graph_location),
                       des_pair_1={'text_x': 0.090, 'text_y': 1.27, 'text': 'MIN', 'value': f"{daily_cdr_min:,.2f}"},
                       des_pair_2={'text_x': 0.345, 'text_y': 1.27, 'text': 'MAX', 'value': f"{daily_cdr_max:,.2f}"},
                       des_pair_3={'text_x': 0.595, 'text_y': 1.27, 'text': 'AVG', 'value': f"{daily_cdr_avg:,.2f}"},
                       des_pair_4={'text_x': 0.83, 'text_y': 1.27, 'text': 'Total Records',
                                   'value': f"{total_records:,.2f}"})
-        print('Writing completed. File located in {}/daily_cdrs'.format(self.graph_location))
+        print(
+            '########## Writing completed. File located in {}/daily_cdrs ##########'.format(self.output_graph_location))
 
+    def daily_unique_users(self):
+        cursor = self.hive.cursor
         print('Daily unique users')
+        print('Calculating total unique uids')
+        q_total_uids = 'select count(*) as total_uids from (select distinct uid from {provider_prefix}_consolidate_data_all) td'.format(
+            provider_prefix=self.provider_prefix)
+        timer = time.time()
+        cursor.execute(q_total_uids)
+        des = cursor.description
+        row_total_uids = cursor.fetchall()
+        row_total_uids = (des[0][0], row_total_uids[0][0])
+        total_uids = row_total_uids[1]
+        print(
+            'Successfully calculated total unique uids. Total unique ids: {ids} ids  \nElapsed time: {time} seconds'.format(
+                ids=total_uids, time=hp.format_two_point_time(timer, time.time())))
         print('Quering date and unique users')
         timer = time.time()
         q_total_daily_uid = "select to_date(call_time) as date, " \
                             "count(distinct uid) as total_users from {provider_prefix}_consolidate_data_all group by " \
-                            "to_date(call_time)" \
+                            "to_date(call_time) order by date" \
             .format(provider_prefix=self.provider_prefix)
-
         cursor.execute(q_total_daily_uid)
-
         row_total_daily_uid = cursor.fetchall()
-        print('Query completed. Elapsed time: {} seconds'.format(time.time() - timer))
+        print('Query completed. Elapsed time: {} seconds'.format(hp.format_two_point_time(timer, time.time())))
         timer = time.time()
         total_daily_uid_x = []
         total_daily_uid_y = []
@@ -849,29 +743,47 @@ class CDRVisualizer:
         row_total_daily_uid_all = cursor.fetchall()
         daily_uid_min, daily_uid_max, daily_uid_avg = row_total_daily_uid_all[0][0], row_total_daily_uid_all[0][1], \
                                                       row_total_daily_uid_all[0][2]
-        print('Query completed. Elapsed time: {} seconds'.format(time.time() - timer))
-
+        print('Query completed. Elapsed time: {} seconds'.format(hp.format_two_point_time(timer, time.time())))
 
         print('Writing into the graph for daily unique users')
         hp.make_graph(total_daily_uid_x, 'Date', total_daily_uid_y, 'Total Users', 'Daily Unique Users',
-                      '{}/daily_unique_users'.format(self.graph_location),
+                      '{}/daily_unique_users'.format(self.output_graph_location),
                       des_pair_1={'text_x': 0.090, 'text_y': 1.27, 'text': 'MIN', 'value': f"{daily_uid_min:,.2f}"},
                       des_pair_2={'text_x': 0.345, 'text_y': 1.27, 'text': 'MAX', 'value': f"{daily_uid_max:,.2f}"},
                       des_pair_3={'text_x': 0.595, 'text_y': 1.27, 'text': 'AVG', 'value': f"{daily_uid_avg:,.2f}"},
                       des_pair_4={'text_x': 0.805, 'text_y': 1.27, 'text': 'Total Unique IDs',
                                   'value': f"{total_uids:,.2f}"})
-        print('Writing completed. File located in {}/daily_unique_users'.format(self.graph_location))
+        print('########## Writing completed. File located in {}/daily_unique_users ##########'.format(self.output_graph_location))
+
+    def daily_unique_locations(self):
+        timer = time.time()
+        cursor = self.hive.cursor
+        print('########## Daily unique locations ##########')
+        print('Calculating daily average location name')
+
+        q_total_locations = "select count(*) as count_unique_locations from (select distinct a2.latitude, a2.longitude from {provider_prefix}_consolidate_data_all a1 " \
+                            "join {provider_prefix}_cell_tower_data_preprocess a2 " \
+                            "on(a1.cell_id = a2.cell_id)) td".format(provider_prefix=self.provider_prefix)
+
+        cursor.execute(q_total_locations)
+        des = cursor.description
+        row_total_locations = cursor.fetchall()
+        row_total_locations = (des[0][0], row_total_locations[0][0])
+        total_unique_locations = row_total_locations[1]
+        print('Successfully calculated daily average location name. Daily average location names : {locs} '
+              '\nElapsed time: {time} seconds'
+              .format(locs=row_total_locations[1], time=hp.format_two_point_time(timer, time.time())))
         timer = time.time()
 
-        print('Daily unique locations')
         print('Querying call_time and unique locations')
         q_total_daily_locations = "select to_date(call_time) as date, " \
                                   "count(distinct a2.latitude, a2.longitude) as unique_locations from {provider_prefix}_consolidate_data_all a1 " \
                                   "join {provider_prefix}_cell_tower_data_preprocess a2 on(a1.cell_id = a2.cell_id) " \
-                                  "group by to_date(call_time)".format(provider_prefix=self.provider_prefix)
+                                  "group by to_date(call_time) order by date".format(
+            provider_prefix=self.provider_prefix)
         cursor.execute(q_total_daily_locations)
         row_total_daily_locations = cursor.fetchall()
-        print('Query completed. Elapsed time: {} seconds'.format(time.time() - timer))
+        print('Query completed. Elapsed time: {} seconds'.format(hp.format_two_point_time(timer, time.time())))
         timer = time.time()
 
         total_daily_location_x = []
@@ -888,30 +800,34 @@ class CDRVisualizer:
         daily_location_min, daily_location_max, daily_location_avg = row_total_daily_location_all[0][0], \
                                                                      row_total_daily_location_all[0][1], \
                                                                      row_total_daily_location_all[0][2]
-        print('Query completed. Elapsed time: {} seconds'.format(time.time() - timer))
+        print('Query completed. Elapsed time: {} seconds'.format(hp.format_two_point_time(timer, time.time())))
 
         print('Writing into the graph for daily unique locations')
         hp.make_graph(total_daily_location_x, 'Date', total_daily_location_y, 'Total Locations',
-                      'Daily Unique Locations', '{}/daily_unique_locations'.format(self.graph_location),
+                      'Daily Unique Locations', '{}/daily_unique_locations'.format(self.output_graph_location),
                       des_pair_1={'text_x': 0.090, 'text_y': 1.27, 'text': 'MIN',
                                   'value': f"{daily_location_min:,.2f}"},
-                      des_pair_2={'text_x': 0.345, 'text_y': 1.27, 'text': 'MAX', 'value': f"{daily_location_max:,.2f}"},
-                      des_pair_3={'text_x': 0.595, 'text_y': 1.27, 'text': 'AVG', 'value': f"{daily_location_avg:,.2f}"},
+                      des_pair_2={'text_x': 0.345, 'text_y': 1.27, 'text': 'MAX',
+                                  'value': f"{daily_location_max:,.2f}"},
+                      des_pair_3={'text_x': 0.595, 'text_y': 1.27, 'text': 'AVG',
+                                  'value': f"{daily_location_avg:,.2f}"},
                       des_pair_4={'text_x': 0.805, 'text_y': 1.27, 'text': 'Total Unique Locations',
                                   'value': f"{total_unique_locations:,.2f}"})
-        print('Writing completed. File located in {}/daily_unique_locations'.format(self.graph_location))
+        print('########## Writing completed. File located in {}/daily_unique_locations ###########'.format(self.output_graph_location))
 
+    def daily_average_cdrs(self):
+        cursor = self.hive.cursor
         timer = time.time()
-        print('Daily Average CDRs')
+        print('########## Daily Average CDRs ##########')
         print('Querying for average cdr and total unique users')
         q_total_daily_avg_cdr = "select date, total_records/total_uids as daily_average_cdr from(select to_date(call_time) as date, " \
                                 "count(distinct uid) as total_uids, count(*) as total_records from {provider_prefix}_consolidate_data_all a1 " \
-                                "group by to_date(call_time))td1".format(
+                                "group by to_date(call_time) order by date)td1 ".format(
             provider_prefix=self.provider_prefix)
 
         cursor.execute(q_total_daily_avg_cdr)
         row_total_daily_avg_cdr = cursor.fetchall()
-        print('Query completed. Elapsed time: {} seconds'.format(time.time() - timer))
+        print('Query completed. Elapsed time: {} seconds'.format(hp.format_two_point_time(timer, time.time())))
         timer = time.time()
 
         total_daily_avg_cdr_x = []
@@ -927,17 +843,17 @@ class CDRVisualizer:
         cursor.execute(q_total_daily_location_all)
 
         row_total_daily_avg_cdr_all = cursor.fetchall()
-        print('Query completed. Elapsed time: {} seconds'.format(time.time() - timer))
-        timer = time.time()
+        print('Query completed. Elapsed time: {} seconds'.format(hp.format_two_point_time(timer, time.time())))
         daily_avg_cdr = row_total_daily_avg_cdr_all[0][0]
-        print('Writing into the graph for daily average CDRs')
+        print('########## Writing into the graph for daily average CDRs ##########')
         hp.make_graph(total_daily_avg_cdr_x, 'Date', total_daily_avg_cdr_y, 'Total Daily Average CDRs',
-                      'Daily Average CDRs', '{}/daily_avg_cdr'.format(self.graph_location),
+                      'Daily Average CDRs', '{}/daily_avg_cdr'.format(self.output_graph_location),
                       des_pair_1={'text_x': 0.035, 'text_y': 1.27, 'text': 'Total Daily Avg CDRs',
                                   'value': f"{daily_avg_cdr:,.2f}"})
 
-        print('Daily unique average locations')
-
+    def daily_unique_average_locations(self):
+        print('########## Daily unique average locations ##########')
+        cursor = self.hive.cursor
         disable = False
         for item in self.cdr_data_layer:
             if str.lower(item['name']) == 'cell_id' and item['output_no'] == -1 \
@@ -951,12 +867,12 @@ class CDRVisualizer:
                                           "count(distinct a2.latitude, a2.longitude)  as unique_locations , count(distinct a1.uid) as unique_users, " \
                                           "count(distinct a1.cell_id) as unique_cell_ids from {provider_prefix}_consolidate_data_all a1 " \
                                           "join {provider_prefix}_cell_tower_data_preprocess a2 on(a1.cell_id = a2.cell_id) " \
-                                          "group by to_date(call_time)) td1".format(
+                                          "group by to_date(call_time) order by date) td1".format(
                 provider_prefix=self.provider_prefix)
 
             cursor.execute(q_total_daily_avg_locations)
             row_total_daily_avg_locations = cursor.fetchall()
-            print('Query completed. Elapsed time: {} seconds'.format(time.time() - timer))
+            print('Query completed. Elapsed time: {} seconds'.format(hp.format_two_point_time(timer, time.time())))
             timer = time.time()
             total_daily_avg_location_x = []
             total_daily_avg_location_y = []
@@ -969,37 +885,18 @@ class CDRVisualizer:
             cursor.execute(q_total_daily_avg_location_all)
 
             row_total_daily_location_all = cursor.fetchall()
-            print('Query completed. Elapsed time: {} seconds'.format(time.time() - timer))
+            print('Query completed. Elapsed time: {} seconds'.format(hp.format_two_point_time(timer, time.time())))
             timer = time.time()
             daily_avg_location_cell_ids, daily_avg_location = row_total_daily_location_all[0][0], \
                                                               row_total_daily_location_all[0][1]
             print('Writing into the graph for daily unique average locations')
             hp.make_graph(total_daily_avg_location_x, 'Date', total_daily_avg_location_y, 'Total Unique Locations',
                           'Daily Unique Average Locations',
-                          '{}/daily_unique_avg_locations'.format(self.graph_location),
+                          '{}/daily_unique_avg_locations'.format(self.output_graph_location),
                           des_pair_1={'text_x': 0.00, 'text_y': 1.27, 'text': 'Avg Daily Unique Cell IDs ',
                                       'value': f"{daily_avg_location_cell_ids:,.2f}"},
                           des_pair_2={'text_x': 0.28, 'text_y': 1.27, 'text': 'Avg Daily Unique Locations',
                                       'value': f"{daily_avg_location:,.2f}"})
-            print('Writing completed. File located in {}/daily_unique_avg_locations'.format(self.graph_location))
+            print('########## Writing completed. File located in {}/daily_unique_avg_locations ##########'.format(self.output_graph_location))
         else:
             print('call_time or cell_id is in incorrect form. Ignored output.')
-
-    def calculate_od(self):
-        cursor = self.hive.cursor
-        query = "CREATE TABLE la_cdr_all_with_ant_zone_by_uid (uid string, arr ARRAY<ARRAY<string>>)" \
-                "PARTITIONED BY (pdt string)" \
-                "ROW FORMAT DELIMITED" \
-                "FIELDS TERMINATED BY '\t'" \
-                "COLLECTION ITEMS TERMINATED BY ','" \
-                "MAP KEYS TERMINATED BY '!'" \
-                "LINES TERMINATED BY '\n'" \
-                "STORED AS SEQUENCEFILE"
-
-        cursor.execute(query)
-
-        # query = "INSERT OVERWRITE TABLE  la_cdr_all_with_ant_zone_by_uid  PARTITION (pdt)" \
-        #         "select uid,  CreateTrajectoriesJICAWithZone(uid,call_time,duration,a2.longitude,a2.latitude,a1.cell_id,district_id)" \
-        #         "as arr,pdt from la_cdr_all_with_pro_dis a1 JOIN {provider_prefix}_consolidate_data_all a2" \
-        #         "on(a1.cell_id = a2.cell_id) where pdt) = " \
-        #         "'2016-05-01' group by uid, pdt"

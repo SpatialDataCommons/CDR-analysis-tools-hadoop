@@ -31,6 +31,10 @@ def get_admin_units_from_mapping(cell_tower_mapping):
     return admin_units
 
 
+def format_two_point_time(start, end):
+    return round(end - start, 2)
+
+
 def get_time_from_csv(file_loc, im_replicate):
     with open(file_loc) as csv_file:
         csv_reader = csv.reader(csv_file, delimiter=',')
@@ -41,6 +45,7 @@ def get_time_from_csv(file_loc, im_replicate):
                     start_date = row[5]
                     end_date = row[6]
                 else:
+                    print(row)
                     start_date = row[6]
                     end_date = row[7]
                 break

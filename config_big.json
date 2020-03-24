@@ -24,8 +24,8 @@
 
 	"frequent_location_percentage": 80,
 
-	"csv_location": "csv_reports",
-	"graph_location": "graphical_reports",
+	"output_report_location": "output_reports_big",
+	"output_graph_location": "graphical_reports_big",
 
 	"od_admin_unit": "admin1",
 
