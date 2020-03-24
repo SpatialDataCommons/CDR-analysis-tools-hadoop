@@ -4,6 +4,7 @@ Like the standalone version, this repository is a set of tools written in Python
 
 This repository will be incrementally updated from time to time. Kindly visit the repository and have a look at this file. 
 
+
 ## Getting Started
 
 These instructions will get you a copy of the software package and running on your local machine. It can be run on both Windows and Linux. The tool dependencies are in the requirements.txt file so that the user can install all of them in just 1 command.
@@ -31,7 +32,7 @@ Structure this package
 |         - Relocation PoI
 |         - Route Interpolation with transpotation network
 ```
-
+See [Statistics Report Section](../master/Statistics/)
 
 
 ## Data preparation
@@ -89,7 +90,7 @@ The mapping in this file needs to be done in the same way as previously mentione
 ```
 
 One difference is that you need to supply at least one administration unit or your interested location to calculate zone population. For examplle, in the "input_no" 9, it contains district and is mapped to "ADMIN1" (administration unit 1). It needs to be in the format ADMIN[0-5] to make the tool work (you may need to have shoppnig complex names in "input_name" and name it "ADMIN0" for example).
-If you want to visualize, put your geojson file location in the "geojson_filename" and the data will be joined with the zone population data and can be visualized in https://kepler.gl
+If you want to visualize, put your geojson file location in the "geojson_filename" and the data will be joined with the zone population data and can be visualized in [kepler.gl](https://kepler.gl)
 
 ## Configuration
 In config.json file, you need to assign the right path, prefix, location and so on. Here is an example of a config.json file with an explanation 
