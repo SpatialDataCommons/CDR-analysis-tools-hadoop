@@ -1,6 +1,5 @@
 .idea/
 cdrenv/
-*reports*/
 japan.json
 config.json
 config_big.json
