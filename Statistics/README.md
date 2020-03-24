@@ -15,7 +15,7 @@ Located in calculate_data_statistics(). In the data statistics, the result outpu
 7. Start date (start_date): the starting date of the data
 8. End date (end_date): the end date of the data
 
-##Daily and Monthly Statistics
+## Daily and Monthly Statistics
 Located in calculate_daily_statistics() and calculate_monthly_statistics (see the [daily](../Statistics/output_reports/css_provider_data_stat_daily.csv) and [monthly](../Statistics/output_reports/css_provider_data_stat_monthly.csv) output). Calculating some properties order by date first and then the type of call type and network type.
 
 Each field in the daily statistics is by a particular date (or year and month for monthly statistics), call type and network type including:
