@@ -4,7 +4,7 @@ format of CSV file and a graph (png) files
 To illustrate, a simple csv file for cdr and mapping will be used and they are located in.
 # Output Reports
 ## Data statistics 
-Located in calculate_data_statistics(). In the data statistics, the result output (see the ****LINK******file here) provided will be:
+Located in calculate_data_statistics(). In the data statistics, the result output (see the [Data statistics](../Statistics/output_reports/css_file_data_stat.csv)) provided will be:
 
 1. Total Records (total_records): the total cdr usage data 
 2. Total Days (total_days): the total days that have usage
@@ -16,7 +16,7 @@ Located in calculate_data_statistics(). In the data statistics, the result outpu
 8. End date (end_date): the end date of the data
 
 ##Daily and Monthly Statistics
-Located in calculate_daily_statistics() and calculate_monthly_statistics (see the ****LINKdaily output and ****LINKmonthly output). Calculating some properties order by date first and then the type of call type and network type.
+Located in calculate_daily_statistics() and calculate_monthly_statistics (see the [daily](../Statistics/output_reports/css_provider_data_stat_daily.csv) and [monthly](../Statistics/output_reports/css_provider_data_stat_monthly.csv) output). Calculating some properties order by date first and then the type of call type and network type.
 
 Each field in the daily statistics is by a particular date (or year and month for monthly statistics), call type and network type including:
 1. Date (date): the dates that have cdr records
@@ -52,17 +52,17 @@ DISTRICT column is ADMIN1.
 If you are able to provide a geojson file for this administration level then put it in the key "geojson_filename" with the name of the field in geojson in "geojson_col_name"
  in order for the tool to join the attribute correctly.
  
-The result you get is the zone_base_aggregations_level_ADMIN{X}.csv and you can see the result output ****LINKhere\
+The result you get is the zone_base_aggregations_level_ADMIN{X}.csv and you can see the result output [zone_based_aggregations_level_ADMIN1](../Statistics/output_reports/zone_based_aggregations_level_ADMIN1.csv)
 
 which includes:
 1. Administration Level x (admin{x}): Your input administration level x
 2. Count Activities (count_activities): Total CDR Records that are in the administration level
 3. Count Unique IDs (count_unique_ids): Total Unique Ids
 
-and {geojson_file_name}_joined_ADMIN{X}.json (you can put this in visualization service such as https://kepler.gl)
+and {geojson_file_name}_joined_ADMIN{X}.json (you can put this in visualization service such as [kepler.gl](https://kepler.gl))
 
 ## Summary Data
-For the output summary date (****LINKhere). It contains overall statistics of the cdr data including:
+For the output summary date [(summary)](../Statistics/output_reports/summary_stats.csv). It contains overall statistics of the cdr data including:
 
 1. Total records (total_records)
 2. Total unique IDs (total_uids)
@@ -78,26 +78,30 @@ Frequent locations (All-day and night) output is the most popular cell_id in whi
 The output here will be a table named {your_prefix}_frequent_location_thresholded and {your_prefix}_frequent_location_thresholded.
 Example output
 
+![alt text](https://github.com/shibalab/CDR-analysis-tools-hadoop/blob/master/Statistics/output_reports/frequent_location_output_sample.png "Frequent Locations")
 
-****LINK PHOTO of cropped table
 
 # Output Graphs
 ## User Date Histogram
-The output histogram (here) is the histogram of each number of days (x) with the corresponding number of unique ids of users who make a call for the particular number of days (y).
+The output histogram is the histogram of each number of days (x) with the corresponding number of unique ids of users who make a call for the particular number of days (y).
+![alt text](https://github.com/shibalab/CDR-analysis-tools-hadoop/blob/master/Statistics/output_graphs/user_data_histogram.png "User Date Histogram")
 ## Daily CDRs
 The graph reports the daily usage of a user each day with minimum, maximum, average and total cdr
-***PHOTOLINK
+![alt text](https://github.com/shibalab/CDR-analysis-tools-hadoop/blob/master/Statistics/output_graphs/daily_cdrs.png "Daily CDRs")
 ## Daily CDRs by call type
 This graph reports the daily usage of a user each day by call type (multiple lines)
-***PHOTOLINK
+![alt text](https://github.com/shibalab/CDR-analysis-tools-hadoop/blob/master/Statistics/output_graphs/daily_cdr_by_call_type.png "Daily CDRs by call type")
 ## Daily Unique Users
 Daily unique uids are reported daily in the graph with statistics information (minimum, maximum, average and total)
-***PHOTOLINK
+![alt text](https://github.com/shibalab/CDR-analysis-tools-hadoop/blob/master/Statistics/output_graphs/daily_unique_users.png "Daily Unique Users")
 ## Daily Unique Locations
 Daily unique locations (unique latitude and longitude) are reported daily in the graph with statistics information (minimum, maximum, average and total)
+![alt text](https://github.com/shibalab/CDR-analysis-tools-hadoop/blob/master/Statistics/output_graphs/daily_unique_locations.png "Daily Unique Locations")
 ## Daily average CDRs
 Daily average CDRs are the daily CDR per user in average with the average of them by days displayed on top
-***PHOTOLINK
+![alt text](https://github.com/shibalab/CDR-analysis-tools-hadoop/blob/master/Statistics/output_graphs/daily_avg_cdr.png "Daily Average CDRs")
+
 ## Daily Unique Average Locations
 This graphs represent daily average locations which are the daily CDR per user in average with the average of them by days being shown on the top of the graph
-***PHOTOLINK
+![alt text](https://github.com/shibalab/CDR-analysis-tools-hadoop/blob/master/Statistics/output_graphs/daily_unique_avg_locations.png "Daily Average CDRs")
+
