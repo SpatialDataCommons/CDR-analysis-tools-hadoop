@@ -21,7 +21,7 @@ class CDRVisualizer:
         print('########## Done. Time elapsed: {} seconds ##########'.format(hp.format_two_point_time(timer, time.time())))
         timer = time.time()
         print('########## Creating Tables ##########')
-        self.hive.create_tables(config, data)
+        # self.hive.create_tables(config, data)
         print('########## Done create all tables. Time elapsed: {} seconds ##########'.format(hp.format_two_point_time(timer, time.time())))
 
     def calculate_data_statistics(self):
@@ -398,8 +398,9 @@ class CDRVisualizer:
                     writer.writerow(row)
             print('Writing completed. Time elapsed: {} seconds'.format(hp.format_two_point_time(timer, time.time())))
             timer = time.time()
-            print('Writing into geojson file ' + geo_json_filename[geo_i][:-4] + '_joined_' + admin_unit + '.json')
+
             if geo_json_filename[geo_i] != '':
+                print('Writing into geojson file ' + geo_json_filename[geo_i][:-4] + '_joined_' + admin_unit + '.json')
                 with open('{}/'.format(self.output_report_location) + geo_json_filename[geo_i][:-4] + '_joined_' + admin_unit + '.json', "w",
                           newline='') as outfile:
                     json.dump(geo_jsons_active[geo_i], outfile)
@@ -545,7 +546,7 @@ class CDRVisualizer:
         # average usage per day
         print('Calculating average daily usage')
         output_2_rows = []
-        row_avg_daily_usage = ('average_usage_per_day', round(float(total_records / total_days), 2))
+        row_avg_daily_usage = ('average_usage_per_day', round(float(total_records / total_days), 3))
         output_2_rows.append(row_avg_daily_usage)
         print('Successfully calculated average daily usage. Daily average usages : {uses} '
               '\nElapsed time: {time} seconds'
@@ -561,12 +562,12 @@ class CDRVisualizer:
 
         if not disable:
             print('########## Calculating average daily voice call usage ##########')
-            q_avg_daily_voice = "select count(*)/{total_records} as average_daily_voice from {provider_prefix}_consolidate_data_all where call_type = 'VOICE'".format(
-                provider_prefix=self.provider_prefix, total_records=total_records)
+            q_avg_daily_voice = "select count(*)/{total_days} as average_daily_voice from {provider_prefix}_consolidate_data_all where call_type = 'VOICE'".format(
+                provider_prefix=self.provider_prefix, total_days=total_days)
             cursor.execute(q_avg_daily_voice)
             des = cursor.description
             row_avg_daily_voice = cursor.fetchall()
-            row_avg_daily_voice = (des[0][0], round(row_avg_daily_voice[0][0], 2))
+            row_avg_daily_voice = (des[0][0], round(row_avg_daily_voice[0][0], 3))
             output_2_rows.append(row_avg_daily_voice)
             print('Successfully calculated average daily voice call usage. Daily average sms usages : {uses} '
                   '\nElapsed time: {time} seconds'
@@ -574,12 +575,12 @@ class CDRVisualizer:
             timer = time.time()
             # avg sms per day
             print('Calculating average daily sms usage')
-            q_avg_daily_sms = "select count(*)/{total_records} as average_daily_sms from {provider_prefix}_consolidate_data_all where call_type = 'SMS'".format(
-                provider_prefix=self.provider_prefix, total_records=total_records)
+            q_avg_daily_sms = "select count(*)/{total_days} as average_daily_sms from {provider_prefix}_consolidate_data_all where call_type = 'SMS'".format(
+                provider_prefix=self.provider_prefix, total_days=total_days)
             cursor.execute(q_avg_daily_sms)
             des = cursor.description
             row_avg_daily_sms = cursor.fetchall()
-            row_avg_daily_sms = (des[0][0], round(row_avg_daily_sms[0][0], 2))
+            row_avg_daily_sms = (des[0][0], round(row_avg_daily_sms[0][0], 3))
             output_2_rows.append(row_avg_daily_sms)
             print('########## Successfully calculated average daily sms usage. Daily average sms usages : {uses} ##########'
                   '\n########## Elapsed time: {time} seconds ##########'
@@ -597,37 +598,41 @@ class CDRVisualizer:
 
         if not disable:
             print('Calculating average daily unique cell id')
-            q_avg_daily_unique_cell_id = "select count(*)/{total_records} as average_daily_unique_cell_id from (select distinct cell_id from {provider_prefix}_consolidate_data_all) td" \
-                .format(provider_prefix=self.provider_prefix, total_records=total_records)
+            q_avg_daily_unique_cell_id = "select sum(td.count)/{total_days} as average_daily_unique_cell_id from (select count(distinct cell_id) as count from {provider_prefix}_consolidate_data_all group by to_date(call_time)) td" \
+                .format(provider_prefix=self.provider_prefix, total_days=total_days)
 
             cursor.execute(q_avg_daily_unique_cell_id)
             des = cursor.description
             row_avg_daily_unique_cell_id = cursor.fetchall()
-            row_avg_daily_unique_cell_id = (des[0][0], round(row_avg_daily_unique_cell_id[0][0], 2))
+            row_avg_daily_unique_cell_id = (des[0][0], round(row_avg_daily_unique_cell_id[0][0], 3))
             output_2_rows.append(row_avg_daily_unique_cell_id)
             print('Successfully calculated average daily unique cell id')
             print('Successfully calculated average daily unique cel id.'
                   '\nElapsed time: {time} seconds'
                   .format(time=hp.format_two_point_time(timer, time.time())))
             timer = time.time()
+            have_district = False
+            for col in self.cdr_cell_tower:
+                if str.lower(col['name']) == 'admin1':
+                    have_district = True
+            if have_district:
+                print('Calculating average daily administration level 1')
+                q_avg_daily_district = (
+                    "select sum(td.count)/{total_days} as average_{level}_per_day "\
+                    "from ( select count(distinct a1.{level}) as count from {provider_prefix}_cell_tower_data_preprocess a1 "\
+                    "JOIN {provider_prefix}_consolidate_data_all a2 " \
+                    "on (a1.cell_id = a2.cell_id) group by to_date(call_time))td")\
+                    .format(provider_prefix=self.provider_prefix, level='ADMIN1', total_days=total_days)
 
-            print('Calculating average daily district')
-            q_avg_daily_district = (
-                "select count(distinct a1.{level})/{total_records} as average_district_per_day " \
-                "from {provider_prefix}_cell_tower_data_preprocess a1 " \
-                "JOIN {provider_prefix}_consolidate_data_all a2 " \
-                "on (a1.cell_id = a2.cell_id)") \
-                .format(provider_prefix=self.provider_prefix, level='ADMIN1', total_records=total_records)
-
-            cursor.execute(q_avg_daily_district)
-            des = cursor.description
-            row_avg_daily_district = cursor.fetchall()
-            row_avg_daily_district = (des[0][0], round(row_avg_daily_district[0][0], 2))
-            output_2_rows.append(row_avg_daily_district)
-            print('Successfully calculated average daily district. Daily average districts : {dists} '
-                  '\nElapsed time: {time} seconds'
-                  .format(dists=row_avg_daily_district[1], time=hp.format_two_point_time(timer, time.time())))
-            timer = time.time()
+                cursor.execute(q_avg_daily_district)
+                des = cursor.description
+                row_avg_daily_district = cursor.fetchall()
+                row_avg_daily_district = (des[0][0], round(row_avg_daily_district[0][0], 3))
+                output_2_rows.append(row_avg_daily_district)
+                print('Successfully calculated average daily administration level 1. Daily average value : {dists} '
+                      '\nElapsed time: {time} seconds'
+                      .format(dists=row_avg_daily_district[1], time=hp.format_two_point_time(timer, time.time())))
+                timer = time.time()
 
         else:
             print('Skipped due to incomplete cell_id data')
@@ -655,7 +660,7 @@ class CDRVisualizer:
         timer = time.time()
         cursor = self.hive.cursor
         print('########## Daily cdrs ##########')
-        print('Selecting date and total records')
+        print('Selecting total records')
         q_total_records = 'select count(*) as total_records from {provider_prefix}_consolidate_data_all'.format(
             provider_prefix=self.provider_prefix)
         cursor.execute(q_total_records)
@@ -707,7 +712,7 @@ class CDRVisualizer:
 
     def daily_unique_users(self):
         cursor = self.hive.cursor
-        print('Daily unique users')
+        print('########## Daily unique users ###########')
         print('Calculating total unique uids')
         q_total_uids = 'select count(*) as total_uids from (select distinct uid from {provider_prefix}_consolidate_data_all) td'.format(
             provider_prefix=self.provider_prefix)

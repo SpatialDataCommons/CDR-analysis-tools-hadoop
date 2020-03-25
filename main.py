@@ -29,7 +29,7 @@ def main():
     #
     # vs.calculate_zone_population()
     # vs.calculate_user_date_histogram()
-    # vs.calculate_summary()
+    vs.calculate_summary()
     # vs.daily_cdrs()
     # vs.daily_unique_users()
     # vs.daily_unique_locations()

@@ -18,17 +18,17 @@ class HiveConnector:
             os.makedirs(config.output_graph_location)
 
     def create_tables(self, config, data):
-        # self.import_cell_tower_data_raw(config, data)
-        # self.preprocess_cell_tower_data(config, data)
-
-        # admins = get_admin_units_from_mapping(config.cdr_cell_tower)
+        self.import_cell_tower_data_raw(config, data)
+        self.preprocess_cell_tower_data(config, data)
         #
-        # for admin in admins:
-        #     self.cell_tower_data_admin(config, admin)
+        admins = get_admin_units_from_mapping(config.cdr_cell_tower)
 
-        # self.import_raw(config, data)
-        # self.preprocess_data(config, data)
-        # self.consolidate_table(config, data)
+        for admin in admins:
+            self.cell_tower_data_admin(config, admin)
+        #
+        self.import_raw(config, data)
+        self.preprocess_data(config, data)
+        self.consolidate_table(config, data)
         self.frequent_location(config)
         self.frequent_location_night(config)
         self.rank1_frequent_location(config)
