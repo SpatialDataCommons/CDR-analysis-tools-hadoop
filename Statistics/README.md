@@ -71,7 +71,7 @@ For the output summary date [(summary)](../Statistics/output_reports/summary_sta
 5. Average daily voice (average_daily_voice): average cdr records of voice data each day
 6. Average daily sms (average_daily_sms): average cdr records of sms data each day
 7. Average daily unique cell id (average_daily_unique_cell_id): average cell id in the cdr data each day
-8. Average district per day (average_district_per_day): average district in the cdr data each day
+8. Average administration level 1 per day (average_admin1_per_day): average admin 1 in the cdr data each day
 
 ## Frequent Locations
 Frequent locations (All-day and night) output is the most popular cell_id in which user make a call data in a day or a night.
