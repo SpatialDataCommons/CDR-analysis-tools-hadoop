@@ -26,8 +26,8 @@
 
 	"od_admin_unit": "ADMIN1",
 
-	"output_report_location": "output_reports_small",
-	"output_graph_location": "graphical_reports_small",
+	"output_report_location": "output_reports_small_latest",
+	"output_graph_location": "graphical_reports_small_latest",
 
 	"cdr_data_layer_comment_": ["do not remove or change the name of the mandatory output columns",
 								"if you don't have anything to map to the output, put -1 in the output_no",

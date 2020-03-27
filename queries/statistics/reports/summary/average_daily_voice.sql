@@ -1,0 +1,1 @@
+select count(*)/{total_days} as average_daily_voice from {provider_prefix}_consolidate_data_all where call_type = 'VOICE'

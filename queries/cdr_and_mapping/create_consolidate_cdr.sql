@@ -1,0 +1,3 @@
+CREATE TABLE {provider_prefix}_consolidate_data_all({arg_prep})
+PARTITIONED BY (pdt string) ROW FORMAT DELIMITED
+FIELDS TERMINATED BY ',' LINES TERMINATED BY '\n' STORED AS SEQUENCEFILE

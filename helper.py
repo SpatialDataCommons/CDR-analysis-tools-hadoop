@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import csv
 import pandas
 from matplotlib.widgets import TextBox
-
+from codecs import open
 
 def json_file_to_object(json_file, encoding=''):
     if encoding == '':
@@ -17,6 +17,11 @@ def json_file_to_object(json_file, encoding=''):
 def string_to_json(str_in):
     return json.loads(str_in)
 
+
+def sql_to_string(filename):
+    path = "queries/" + filename
+    sql = open(path, mode='r', encoding='utf-8-sig').read()
+    return sql
 
 def get_admin_units_from_mapping(cell_tower_mapping):
     admin_units = []

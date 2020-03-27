@@ -21,7 +21,7 @@ class CDRVisualizer:
         print('########## Done. Time elapsed: {} seconds ##########'.format(hp.format_two_point_time(timer, time.time())))
         timer = time.time()
         print('########## Creating Tables ##########')
-        # self.hive.create_tables(config, data)
+        self.hive.create_tables(config, data)
         print('########## Done create all tables. Time elapsed: {} seconds ##########'.format(hp.format_two_point_time(timer, time.time())))
 
     def calculate_data_statistics(self):
@@ -44,22 +44,15 @@ class CDRVisualizer:
                     imei = ''
                 elif str.lower(map['input_name']) == 'imsi' and str.lower(map['name']) == 'uid':
                     imsi = ''
-            query = "select count(*) as total_records, " + \
-                    "count(distinct to_date(call_time)) as total_days, " + \
-                    "count(distinct uid) as unique_id, " + \
-                    imei + \
-                    imsi + \
-                    "count(distinct cell_id) as unique_location_name, " + \
-                    "min(to_date(call_time)) as start_date, " + \
-                    "max(to_date(call_time))  as end_date " + \
-                    "from {provider_prefix}_preprocess ".format(provider_prefix=self.provider_prefix)
-
+            raw_sql = hp.sql_to_string('statistics/reports/all_statistics/data_statistics.sql')
+            query = raw_sql.format(provider_prefix=self.provider_prefix, imei=imei, imsi=imsi)
             print('Calculating data statistics')
             timer = time.time()
             cursor.execute(query)
             print('Calculated data statistics. Elasped time: {} seconds'.format(hp.format_two_point_time(timer, time.time())))
             print('Writing to {}/css_file_data_stat.csv'.format(self.output_report_location))
             timer = time.time()
+
             with open("{}/css_file_data_stat.csv".format(self.output_report_location), "w", newline='') as outfile:
                 writer = csv.writer(outfile, quoting=csv.QUOTE_NONNUMERIC)
                 writer.writerow(col[0] for col in cursor.description)
@@ -95,57 +88,16 @@ class CDRVisualizer:
         if not disable:
             print('########## CALCULATING DAILY STATISTICS ##########')
             cursor = self.hive.cursor
-            cursor.set_arraysize(50)
+            cursor.set_arraysize(1)
             results = []
 
             timer = time.time()
             print('Calculating Daily Statistics')
             # FOR CASE ALL
-            query = "SELECT to_date(call_time) as date, 'ALL' as call_type, 'ALL' as network_type, COUNT(*) as total_records, " + \
-                    "COUNT(DISTINCT TO_DATE(call_time)) as total_days, " + \
-                    'COUNT(DISTINCT uid) as unique_id, ' + \
-                    imei + imsi + \
-                    'COUNT(DISTINCT cell_id) as unique_location_name ' + \
-                    "FROM {provider_prefix}_consolidate_data_all where to_date(pdt) between to_date('{start_date}') and to_date('{end_date}') " \
-                        .format(provider_prefix=self.provider_prefix, start_date=start_date, end_date=end_date) + \
-                    "GROUP BY to_date(call_time)"
-
-            query += ' UNION '
-
-            query += "SELECT to_date(call_time) as date, call_type, 'ALL' as network_type, COUNT(*) as total_records, " + \
-                     "COUNT(DISTINCT TO_DATE(call_time)) as total_days, " + \
-                     'COUNT(DISTINCT uid) as unique_id, ' + \
-                     imei + imsi + \
-                     'COUNT(DISTINCT cell_id) as unique_location_name ' + \
-                     "FROM {provider_prefix}_consolidate_data_all where to_date(pdt) between to_date('{start_date}') and to_date('{end_date}') " \
-                         .format(provider_prefix=self.provider_prefix, start_date=start_date, end_date=end_date) + \
-                     "GROUP BY to_date(call_time), call_type"
-
-            query += ' UNION '
-
-            query += "SELECT to_date(call_time) as date, 'ALL' as call_type,  network_type, COUNT(*) as total_records, " + \
-                     "COUNT(DISTINCT TO_DATE(call_time)) as total_days, " + \
-                     'COUNT(DISTINCT uid) as unique_id, ' + \
-                     imei + imsi + \
-                     'COUNT(DISTINCT cell_id) as unique_location_name ' + \
-                     "FROM {provider_prefix}_consolidate_data_all where to_date(pdt) between to_date('{start_date}') and to_date('{end_date}') " \
-                         .format(provider_prefix=self.provider_prefix, start_date=start_date, end_date=end_date) + \
-                     "GROUP BY to_date(call_time), network_type"
-
-            query += ' UNION '
-
-            query += "SELECT to_date(call_time) as date, call_type, network_type, COUNT(*) as total_records, " + \
-                     "COUNT(DISTINCT TO_DATE(call_time)) as total_days, " + \
-                     'COUNT(DISTINCT uid) as unique_id, ' + \
-                     imei + imsi + \
-                     'COUNT(DISTINCT cell_id) as unique_location_name ' + \
-                     "FROM {provider_prefix}_consolidate_data_all where to_date(pdt) between to_date('{start_date}') and to_date('{end_date}') " \
-                         .format(provider_prefix=self.provider_prefix, start_date=start_date, end_date=end_date) + \
-                     "GROUP BY to_date(call_time), call_type, network_type ORDER BY date ASC, call_type ASC, network_type DESC"
-
+            raw_query = hp.sql_to_string('statistics/reports/daily_statistics/daily_statistics.sql')
+            query = raw_query.format(provider_prefix=self.provider_prefix, start_date=start_date, end_date=end_date, imei=imei, imsi=imsi)
             cursor.execute(query)
             print('Query completed. Time elapsed: {} seconds.'.format(hp.format_two_point_time(timer, time.time())))
-            timer = time.time()
             description = cursor.description
             rows = []
 
@@ -164,27 +116,11 @@ class CDRVisualizer:
                     writer.writerow(row)
             print('Successfully wrote to file css_provider_data_stat_daily.csv')
             print('########## FINISHED CALCULATING DAILY STATISTICS ##########')
+
             print('########## Querying daily cdr by call_type ##########')
-
             timer = time.time()
-            query = "SELECT to_date(call_time) as date, 'ALL' as call_type, 'ALL' as network_type, COUNT(*) as total_records, " + \
-                    "COUNT(DISTINCT TO_DATE(call_time)) as total_days, " + \
-                    'COUNT(DISTINCT uid) as unique_id, ' + \
-                    imei + imsi + \
-                    'COUNT(DISTINCT cell_id) as unique_location_name ' + \
-                    "FROM {provider_prefix}_consolidate_data_all where to_date(pdt) between to_date('{start_date}') and to_date('{end_date}') " \
-                        .format(provider_prefix=self.provider_prefix, start_date=start_date, end_date=end_date) + \
-                    "GROUP BY to_date(call_time)"
-            query += ' UNION '
-
-            query += "SELECT to_date(call_time) as date, call_type, 'ALL' as network_type, COUNT(*) as total_records, " + \
-                     "COUNT(DISTINCT TO_DATE(call_time)) as total_days, " + \
-                     'COUNT(DISTINCT uid) as unique_id, ' + \
-                     imei + imsi + \
-                     'COUNT(DISTINCT cell_id) as unique_location_name ' + \
-                     "FROM {provider_prefix}_consolidate_data_all where to_date(pdt) between to_date('{start_date}') and to_date('{end_date}') " \
-                         .format(provider_prefix=self.provider_prefix, start_date=start_date, end_date=end_date) + \
-                     "GROUP BY to_date(call_time), call_type ORDER BY  call_type ASC, network_type DESC"
+            raw_sql = hp.sql_to_string('statistics/graphs/daily_cdrs_by_call_type/daily_cdrs_by_call_type.sql')
+            query = raw_sql.format(provider_prefix=self.provider_prefix, start_date=start_date, end_date=end_date, imei=imei, imsi=imsi)
             cursor.execute(query)
             print('Query completed. Time elapsed: {} seconds.'.format(hp.format_two_point_time(timer, time.time())))
             rows = []
@@ -238,8 +174,6 @@ class CDRVisualizer:
         else:
             print('Mapping for network_type or call_type is not sufficient. Ignored daily statistics')
 
-
-
     def calculate_monthly_statistics(self):
         disable = False
         for item in self.cdr_data_layer:
@@ -249,6 +183,7 @@ class CDRVisualizer:
         if not disable:
             print('########## CALCULATING MONTHLY STATISTICS ##########')
             cursor = self.hive.cursor
+            cursor.set_arraysize(1)
             results = []
             file_location = '{}/css_file_data_stat.csv'.format(self.output_report_location)
 
@@ -268,54 +203,20 @@ class CDRVisualizer:
             start_y, start_m, end_y, end_m = time['start_y'], time['start_m'], time['end_y'], time['end_m']
             print('### Calculating Monthly Statistics ###')
             # FOR CASE ALL
-            query = "SELECT YEAR(call_time) as year, MONTH(call_time) as month  , 'ALL' as call_type, 'ALL' as network_type, COUNT(*) as total_records, " + \
-                    "COUNT(DISTINCT TO_DATE(call_time)) as total_days, " + \
-                    'COUNT(DISTINCT uid) as unique_id, ' + \
-                    imei + imsi + \
-                    'COUNT(DISTINCT cell_id) as unique_location_name ' + \
-                    "FROM {provider_prefix}_consolidate_data_all where (year(pdt) between {start_year} and {end_year}) " \
-                        .format(provider_prefix=self.provider_prefix, start_year=start_y, end_year=end_y) + \
-                    "and (MONTH(pdt) between {start_month} and {end_month}) GROUP BY YEAR(call_time), MONTH(call_time)" \
-                        .format(start_month=start_m, end_month=end_m)
-
-            query += ' UNION '
-
-            query += "SELECT YEAR(call_time) as year, MONTH(call_time) as month, call_type, 'ALL' as network_type, COUNT(*) as total_records, " + \
-                     "COUNT(DISTINCT TO_DATE(call_time)) as total_days, " + \
-                     'COUNT(DISTINCT uid) as unique_id, ' + \
-                     'COUNT(DISTINCT imei) as unique_imei, COUNT(DISTINCT imsi) unique_imsi, ' + \
-                     'COUNT(DISTINCT cell_id) as unique_location_name ' + \
-                     "FROM {provider_prefix}_consolidate_data_all where (year(pdt) between {start_year} and {end_year}) " \
-                         .format(provider_prefix=self.provider_prefix, start_year=start_y, end_year=end_y) + \
-                     "and (MONTH(pdt) between {start_month} and {end_month}) GROUP BY YEAR(call_time), MONTH(call_time), call_type" \
-                         .format(start_month=start_m, end_month=end_m)
-
-            query += ' UNION '
-
-            query += "SELECT YEAR(call_time) as year, MONTH(call_time) as month, 'ALL' as call_type,  network_type, COUNT(*) as total_records, " + \
-                     "COUNT(DISTINCT TO_DATE(call_time)) as total_days, " + \
-                     'COUNT(DISTINCT uid) as unique_id, ' + \
-                     imei + imsi + \
-                     'COUNT(DISTINCT cell_id) as unique_location_name ' + \
-                     "FROM {provider_prefix}_consolidate_data_all where (year(pdt) between {start_year} and {end_year}) " \
-                         .format(provider_prefix=self.provider_prefix, start_year=start_y, end_year=end_y) + \
-                     "and (MONTH(pdt) between {start_month} and {end_month}) GROUP BY YEAR(call_time), MONTH(call_time), network_type" \
-                         .format(start_month=start_m, end_month=end_m)
-
-            query += ' UNION '
-            query += "SELECT YEAR(call_time) as year, MONTH(call_time) as month , call_type, network_type, COUNT(*) as total_records, " + \
-                     "COUNT(DISTINCT TO_DATE(call_time)) as total_days, " + \
-                     'COUNT(DISTINCT uid) as unique_id, ' + \
-                     imei + imsi + \
-                     'COUNT(DISTINCT cell_id) as unique_location_name ' + \
-                     "FROM {provider_prefix}_consolidate_data_all where (year(pdt) between {start_year} and {end_year}) " \
-                         .format(provider_prefix=self.provider_prefix, start_year=start_y, end_year=end_y) + \
-                     "and (MONTH(pdt) between {start_month} and {end_month}) GROUP BY YEAR(call_time), MONTH(call_time), call_type, network_type ".format(
-                         start_month=start_m, end_month=end_m) + \
-                     "ORDER BY year ASC, month ASC, call_type ASC, network_type DESC"
-
+            raw_sql = hp.sql_to_string('statistics/reports/monthly_statistics/monthly_statistics.sql')
+            query = raw_sql.format(provider_prefix=self.provider_prefix,
+                                   start_year=start_y,
+                                   end_year=end_y,
+                                   start_month=start_m,
+                                   end_month=end_m,
+                                   imei=imei,
+                                   imsi=imsi)
             cursor.execute(query)
             description = cursor.description
+            rows = []
+            for row in cursor:
+                rows.append(row)
+
             results += cursor.fetchall()
 
             file_path = '{}/css_provider_data_stat_monthly.csv'.format(self.output_report_location)
@@ -354,23 +255,15 @@ class CDRVisualizer:
         for admin_unit in admin_units_active:
             timer = time.time()
             print('Calculating zone population for {admin}'.format(admin=admin_unit))
-            query = (
-                    "select lv as {level}, sum(td.count) as count_activities, count(td.uid) as count_unique_ids from "
-                    "(select a1.{level} as lv, " +
-                    "count(a1.{level}) as count, a2.uid as uid " +
-                    "from {provider_prefix}_cell_tower_data_preprocess a1 ".format(
-                        provider_prefix=self.provider_prefix) +
-                    "JOIN {provider_prefix}_consolidate_data_all a2 ".format(
-                        provider_prefix=self.provider_prefix) +
-                    "on (a1.cell_id = a2.cell_id) " +
-                    "group by a1.{level}, a2.uid) td group by lv").format(level=admin_unit)
-
+            raw_sql = hp.sql_to_string('statistics/reports/zone_population/zone_population.sql')
+            query = raw_sql.format(provider_prefix=self.provider_prefix, level=admin_unit)
             cursor.execute(query)
+
             description = cursor.description
             print('Successfully zone population for {admin}. Elapsed time: {time} seconds'.format(admin=admin_unit, time=hp.format_two_point_time(timer, time.time())))
             timer = time.time()
             rows = []
-            cursor.set_arraysize(50)
+            cursor.set_arraysize(1)
             for row in cursor:
                 rows.append(row)
 
@@ -411,16 +304,8 @@ class CDRVisualizer:
     def calculate_user_date_histogram(self):
         print('########## CALCULATING USER DATE HISTOGRAM ##########')
         cursor = self.hive.cursor
-
-        query = ("select explode(histogram_numeric(active_days, 10)) as active_day_bins from "
-                 "(select count(*) as active_days, td.uid from "
-                 "(select year(to_date(call_time)) as year, "
-                 "month(to_date(call_time)) as month, "
-                 "day(to_date(call_time)) as day, uid "
-                 "from {provider_prefix}_consolidate_data_all group by uid, year(to_date(call_time)), "
-                 "month(to_date(call_time)), "
-                 "day(to_date(call_time)) order by year, month, day, uid) td "
-                 "group by td.uid) td2".format(provider_prefix=self.provider_prefix))
+        raw_sql = hp.sql_to_string('statistics/graphs/date_histogram/histogram.sql')
+        query = raw_sql.format(provider_prefix=self.provider_prefix)
 
         timer = time.time()
         print('Calculating data histogram')
@@ -463,11 +348,13 @@ class CDRVisualizer:
         tb_1_description = ('All Data', 'Value')
         tb_2_description = ('Statistics',)
         output_1_rows = []
+
         print('Calculating total records')
         timer = time.time()
-        q_total_records = 'select count(*) as total_records from {provider_prefix}_consolidate_data_all'.format(
-            provider_prefix=self.provider_prefix)
+        raw_sql = hp.sql_to_string('statistics/total_records.sql')
+        q_total_records = raw_sql.format(provider_prefix=self.provider_prefix)
         cursor.execute(q_total_records)
+
         des = cursor.description
         row_total_records = cursor.fetchall()
         row_total_records = (des[0][0], row_total_records[0][0])
@@ -476,10 +363,12 @@ class CDRVisualizer:
         print('Successfully calculated total records. Total records: {recs} records \nElapsed time: {time} seconds'
               .format(recs=total_records, time=hp.format_two_point_time(timer, time.time())))
         timer = time.time()
+
         print('Calculating total unique uids')
-        q_total_uids = 'select count(*) as total_uids from (select distinct uid from {provider_prefix}_consolidate_data_all) td'.format(
-            provider_prefix=self.provider_prefix)
+        raw_sql = hp.sql_to_string('statistics/total_unique_uids.sql')
+        q_total_uids = raw_sql.format(provider_prefix=self.provider_prefix)
         cursor.execute(q_total_uids)
+
         des = cursor.description
         row_total_uids = cursor.fetchall()
         row_total_uids = (des[0][0], row_total_uids[0][0])
@@ -488,15 +377,10 @@ class CDRVisualizer:
         print('Successfully calculated total unique uids. Total unique ids: {ids} ids  \nElapsed time: {time} seconds'.format(
             ids=total_uids,time=hp.format_two_point_time(timer, time.time())))
         timer = time.time()
-
+        raw_sql = hp.sql_to_string('statistics/reports/summary/total_days.sql')
         print('Calculating total days')
-        q_total_days = " select count(*) as total_days, min(dates) as start_date, max(dates) as end_date from (select  to_date(" \
-                       "call_time) as dates " \
-                       "from {provider_prefix}_consolidate_data_all " \
-                       "group by to_date(call_time)) td" \
-            .format(provider_prefix=self.provider_prefix)
-
-        cursor.execute(q_total_days)
+        query = raw_sql.format(provider_prefix=self.provider_prefix)
+        cursor.execute(query)
         des = cursor.description
         row_total_days = cursor.fetchall()
 
@@ -562,7 +446,8 @@ class CDRVisualizer:
 
         if not disable:
             print('########## Calculating average daily voice call usage ##########')
-            q_avg_daily_voice = "select count(*)/{total_days} as average_daily_voice from {provider_prefix}_consolidate_data_all where call_type = 'VOICE'".format(
+            raw_sql = hp.sql_to_string('statistics/reports/summary/average_daily_voice.sql')
+            q_avg_daily_voice = raw_sql.format(
                 provider_prefix=self.provider_prefix, total_days=total_days)
             cursor.execute(q_avg_daily_voice)
             des = cursor.description
@@ -575,8 +460,8 @@ class CDRVisualizer:
             timer = time.time()
             # avg sms per day
             print('Calculating average daily sms usage')
-            q_avg_daily_sms = "select count(*)/{total_days} as average_daily_sms from {provider_prefix}_consolidate_data_all where call_type = 'SMS'".format(
-                provider_prefix=self.provider_prefix, total_days=total_days)
+            raw_sql = hp.sql_to_string('statistics/reports/summary/average_daily_sms.sql')
+            q_avg_daily_sms = raw_sql.format(provider_prefix=self.provider_prefix, total_days=total_days)
             cursor.execute(q_avg_daily_sms)
             des = cursor.description
             row_avg_daily_sms = cursor.fetchall()
@@ -598,10 +483,10 @@ class CDRVisualizer:
 
         if not disable:
             print('Calculating average daily unique cell id')
-            q_avg_daily_unique_cell_id = "select sum(td.count)/{total_days} as average_daily_unique_cell_id from (select count(distinct cell_id) as count from {provider_prefix}_consolidate_data_all group by to_date(call_time)) td" \
-                .format(provider_prefix=self.provider_prefix, total_days=total_days)
+            raw_sql = hp.sql_to_string('statistics/reports/summary/average_unique_cell_ids.sql')
+            query = raw_sql.format(provider_prefix=self.provider_prefix, total_days=total_days)
+            cursor.execute(query)
 
-            cursor.execute(q_avg_daily_unique_cell_id)
             des = cursor.description
             row_avg_daily_unique_cell_id = cursor.fetchall()
             row_avg_daily_unique_cell_id = (des[0][0], round(row_avg_daily_unique_cell_id[0][0], 3))
@@ -617,14 +502,10 @@ class CDRVisualizer:
                     have_district = True
             if have_district:
                 print('Calculating average daily administration level 1')
-                q_avg_daily_district = (
-                    "select sum(td.count)/{total_days} as average_{level}_per_day "\
-                    "from ( select count(distinct a1.{level}) as count from {provider_prefix}_cell_tower_data_preprocess a1 "\
-                    "JOIN {provider_prefix}_consolidate_data_all a2 " \
-                    "on (a1.cell_id = a2.cell_id) group by to_date(call_time))td")\
-                    .format(provider_prefix=self.provider_prefix, level='ADMIN1', total_days=total_days)
+                raw_sql = hp.sql_to_string('statistics/reports/summary/average_daily_admin1.sql')
+                query = raw_sql.format(provider_prefix=self.provider_prefix, level='ADMIN1', total_days=total_days)
+                cursor.execute(query)
 
-                cursor.execute(q_avg_daily_district)
                 des = cursor.description
                 row_avg_daily_district = cursor.fetchall()
                 row_avg_daily_district = (des[0][0], round(row_avg_daily_district[0][0], 3))
@@ -650,8 +531,7 @@ class CDRVisualizer:
             for row in output_2_rows:
                 writer.writerow(row)
 
-        print('Successfully wrote to summary_stats.csv'
-              '\nElapsed time: {time} seconds'
+        print('Successfully wrote to summary_stats.csv\nElapsed time: {time} seconds'
               .format(time=hp.format_two_point_time(timer, time.time())))
 
         print('########## FINISHED CALCULATING SUMMARY ##########')
@@ -661,9 +541,10 @@ class CDRVisualizer:
         cursor = self.hive.cursor
         print('########## Daily cdrs ##########')
         print('Selecting total records')
-        q_total_records = 'select count(*) as total_records from {provider_prefix}_consolidate_data_all'.format(
-            provider_prefix=self.provider_prefix)
-        cursor.execute(q_total_records)
+        raw_sql = hp.sql_to_string('statistics/total_records.sql')
+        query = raw_sql.format(provider_prefix=self.provider_prefix)
+        cursor.execute(query)
+
         des = cursor.description
         row_total_records = cursor.fetchall()
         row_total_records = (des[0][0], row_total_records[0][0])
@@ -671,10 +552,8 @@ class CDRVisualizer:
         print('Successfully calculated total records. Total records: {recs} records \nElapsed time: {time} seconds'
               .format(recs=total_records, time=hp.format_two_point_time(timer, time.time())))
         timer = time.time()
-
-        q_total_daily_cdr = "select to_date(call_time) as date, " \
-                            "count(*) as total_records from {provider_prefix}_consolidate_data_all group by " \
-                            "to_date(call_time) order by date".format(provider_prefix=self.provider_prefix)
+        raw_sql = hp.sql_to_string('statistics/graphs/daily_cdrs/total_daily_cdrs.sql')
+        q_total_daily_cdr = raw_sql.format(provider_prefix=self.provider_prefix)
         cursor.execute(q_total_daily_cdr)
         row_total_daily_cdr = cursor.fetchall()
         print('Query done'
@@ -694,7 +573,7 @@ class CDRVisualizer:
 
         row_total_daily_cdr_all = cursor.fetchall()
 
-        daily_cdr_min, daily_cdr_max, daily_cdr_avg = row_total_daily_cdr_all[0][0], row_total_daily_cdr_all[0][1], \
+        daily_cdr_min, daily_cdr_max, daily_cdr_avg = row_total_daily_cdr_all[0][0], row_total_daily_cdr_all[0][1],\
                                                       row_total_daily_cdr_all[0][2]
         print('Done.'
               '\nElapsed time: {time} seconds'
@@ -714,8 +593,8 @@ class CDRVisualizer:
         cursor = self.hive.cursor
         print('########## Daily unique users ###########')
         print('Calculating total unique uids')
-        q_total_uids = 'select count(*) as total_uids from (select distinct uid from {provider_prefix}_consolidate_data_all) td'.format(
-            provider_prefix=self.provider_prefix)
+        raw_sql = hp.sql_to_string('statistics/total_unique_uids.sql')
+        q_total_uids = raw_sql.format(provider_prefix=self.provider_prefix)
         timer = time.time()
         cursor.execute(q_total_uids)
         des = cursor.description
@@ -727,10 +606,8 @@ class CDRVisualizer:
                 ids=total_uids, time=hp.format_two_point_time(timer, time.time())))
         print('Quering date and unique users')
         timer = time.time()
-        q_total_daily_uid = "select to_date(call_time) as date, " \
-                            "count(distinct uid) as total_users from {provider_prefix}_consolidate_data_all group by " \
-                            "to_date(call_time) order by date" \
-            .format(provider_prefix=self.provider_prefix)
+        raw_sql = hp.sql_to_string('statistics/graphs/daily_unique_users/total_daily_uids.sql')
+        q_total_daily_uid = raw_sql.format(provider_prefix=self.provider_prefix)
         cursor.execute(q_total_daily_uid)
         row_total_daily_uid = cursor.fetchall()
         print('Query completed. Elapsed time: {} seconds'.format(hp.format_two_point_time(timer, time.time())))
@@ -765,12 +642,10 @@ class CDRVisualizer:
         cursor = self.hive.cursor
         print('########## Daily unique locations ##########')
         print('Calculating daily average location name')
+        raw_sql = hp.sql_to_string('statistics/graphs/daily_unique_locations/total_unique_locations.sql')
+        query = raw_sql.format(provider_prefix=self.provider_prefix)
 
-        q_total_locations = "select count(*) as count_unique_locations from (select distinct a2.latitude, a2.longitude from {provider_prefix}_consolidate_data_all a1 " \
-                            "join {provider_prefix}_cell_tower_data_preprocess a2 " \
-                            "on(a1.cell_id = a2.cell_id)) td".format(provider_prefix=self.provider_prefix)
-
-        cursor.execute(q_total_locations)
+        cursor.execute(query)
         des = cursor.description
         row_total_locations = cursor.fetchall()
         row_total_locations = (des[0][0], row_total_locations[0][0])
@@ -780,11 +655,9 @@ class CDRVisualizer:
               .format(locs=row_total_locations[1], time=hp.format_two_point_time(timer, time.time())))
         timer = time.time()
 
-        print('Querying call_time and unique locations')
-        q_total_daily_locations = "select to_date(call_time) as date, " \
-                                  "count(distinct a2.latitude, a2.longitude) as unique_locations from {provider_prefix}_consolidate_data_all a1 " \
-                                  "join {provider_prefix}_cell_tower_data_preprocess a2 on(a1.cell_id = a2.cell_id) " \
-                                  "group by to_date(call_time) order by date".format(
+        print('Querying daily unique locations')
+        raw_sql = hp.sql_to_string('statistics/graphs/daily_unique_locations/daily_unique_locations.sql')
+        q_total_daily_locations = raw_sql.format(
             provider_prefix=self.provider_prefix)
         cursor.execute(q_total_daily_locations)
         row_total_daily_locations = cursor.fetchall()
@@ -802,8 +675,8 @@ class CDRVisualizer:
         cursor.execute(q_total_daily_location_all)
 
         row_total_daily_location_all = cursor.fetchall()
-        daily_location_min, daily_location_max, daily_location_avg = row_total_daily_location_all[0][0], \
-                                                                     row_total_daily_location_all[0][1], \
+        daily_location_min, daily_location_max, daily_location_avg = row_total_daily_location_all[0][0],\
+                                                                     row_total_daily_location_all[0][1],\
                                                                      row_total_daily_location_all[0][2]
         print('Query completed. Elapsed time: {} seconds'.format(hp.format_two_point_time(timer, time.time())))
 
@@ -825,10 +698,8 @@ class CDRVisualizer:
         timer = time.time()
         print('########## Daily Average CDRs ##########')
         print('Querying for average cdr and total unique users')
-        q_total_daily_avg_cdr = "select date, total_records/total_uids as daily_average_cdr from(select to_date(call_time) as date, " \
-                                "count(distinct uid) as total_uids, count(*) as total_records from {provider_prefix}_consolidate_data_all a1 " \
-                                "group by to_date(call_time) order by date)td1 ".format(
-            provider_prefix=self.provider_prefix)
+        raw_sql = hp.sql_to_string('statistics/graphs/daily_average_cdrs/daily_average_cdrs.sql')
+        q_total_daily_avg_cdr = raw_sql.format(provider_prefix=self.provider_prefix)
 
         cursor.execute(q_total_daily_avg_cdr)
         row_total_daily_avg_cdr = cursor.fetchall()
@@ -867,14 +738,8 @@ class CDRVisualizer:
         if not disable:
             print('Querying daily average cell ids and daily average locations')
             timer = time.time()
-            q_total_daily_avg_locations = "select date, unique_locations/unique_users as daily_avg_locations, unique_cell_ids/unique_users as daily_avg_cell_ids " \
-                                          "from (select to_date(call_time) as date, " \
-                                          "count(distinct a2.latitude, a2.longitude)  as unique_locations , count(distinct a1.uid) as unique_users, " \
-                                          "count(distinct a1.cell_id) as unique_cell_ids from {provider_prefix}_consolidate_data_all a1 " \
-                                          "join {provider_prefix}_cell_tower_data_preprocess a2 on(a1.cell_id = a2.cell_id) " \
-                                          "group by to_date(call_time) order by date) td1".format(
-                provider_prefix=self.provider_prefix)
-
+            raw_sql = hp.sql_to_string('statistics/graphs/daily_average_unique_locations/daily_average_unique_locations.sql')
+            q_total_daily_avg_locations = raw_sql.format(provider_prefix=self.provider_prefix)
             cursor.execute(q_total_daily_avg_locations)
             row_total_daily_avg_locations = cursor.fetchall()
             print('Query completed. Elapsed time: {} seconds'.format(hp.format_two_point_time(timer, time.time())))
@@ -892,7 +757,8 @@ class CDRVisualizer:
             row_total_daily_location_all = cursor.fetchall()
             print('Query completed. Elapsed time: {} seconds'.format(hp.format_two_point_time(timer, time.time())))
             timer = time.time()
-            daily_avg_location_cell_ids, daily_avg_location = row_total_daily_location_all[0][0], \
+
+            daily_avg_location_cell_ids, daily_avg_location = row_total_daily_location_all[0][0],\
                                                               row_total_daily_location_all[0][1]
             print('Writing into the graph for daily unique average locations')
             hp.make_graph(total_daily_avg_location_x, 'Date', total_daily_avg_location_y, 'Total Unique Locations',
@@ -902,6 +768,146 @@ class CDRVisualizer:
                                       'value': f"{daily_avg_location_cell_ids:,.2f}"},
                           des_pair_2={'text_x': 0.28, 'text_y': 1.27, 'text': 'Avg Daily Unique Locations',
                                       'value': f"{daily_avg_location:,.2f}"})
-            print('########## Writing completed. File located in {}/daily_unique_avg_locations ##########'.format(self.output_graph_location))
+            print('########## Writing completed. File located in {}/daily_unique_avg_locations ##########'
+                  .format(self.output_graph_location))
         else:
             print('call_time or cell_id is in incorrect form. Ignored output.')
+
+    def frequent_location(self):
+        cursor = self.hive.cursor
+        print('########## CREATE FREQUENT LOCATION TABLE ##########')
+        print('Checking and dropping frequent location table if existing.')
+        timer = time.time()
+        admin = self.od_admin_unit
+        cursor.execute('DROP TABLE IF EXISTS {provider_prefix}_frequent_location'.format(provider_prefix=self.provider_prefix))
+        print('Checked and dropped frequent location table if existing. Elapsed time: {} seconds'.format(
+            hp.format_two_point_time(timer, time.time())))
+        timer = time.time()
+        print('Creating frequent location table')
+        raw_sql = hp.sql_to_string('statistics/reports/frequent_locations/create_frequent_locations.sql')
+        query = raw_sql.format(provider_prefix=self.provider_prefix, admin_params=admin + '_id string')
+
+        cursor.execute(query)
+        print('Created frequent location table. Elapsed time: {} seconds'.format(hp.format_two_point_time(timer, time.time())))
+        timer = time.time()
+        print('Inserting into frequent location table')
+        raw_sql = hp.sql_to_string('statistics/reports/frequent_locations/frequent_locations.sql')
+        query = raw_sql.format(provider_prefix=self.provider_prefix, admin_params=admin + '_id', admin=admin)
+
+        cursor.execute(query)
+        print('Inserted into frequent location table.\nResult are in the table named {provider_prefix}_frequent_location\nElapsed time: {time} seconds. '
+              .format(provider_prefix=self.provider_prefix, time=hp.format_two_point_time(timer, time.time())))
+        timer = time.time()
+        print('Dropping freq location with accumulated percentage')
+        cursor.execute(
+            'DROP TABLE IF EXISTS {provider_prefix}_freq_with_acc_wsum'.format(provider_prefix=self.provider_prefix))
+        print('Checked and dropped frequent location table with accumulated percentage if existing. Elapsed time: {} seconds'.format(
+            hp.format_two_point_time(timer, time.time())))
+        timer = time.time()
+        print('Creating and insert freq with acc wsum Table (Frequent Location) with accumulated percentage')
+        raw_sql = hp.sql_to_string('statistics/reports/frequent_locations/frequent_locations_wsum.sql')
+        query = raw_sql.format(provider_prefix=self.provider_prefix, admin=admin)
+        cursor.execute(query)
+        print(
+            'Inserted into frequent location table with accumulated percentage. \nElapsed time: {time} seconds. '
+            .format(time=hp.format_two_point_time(timer, time.time())))
+        timer = time.time()
+        print('Dropping frequent location thresholded table')
+        cursor.execute(
+            'DROP TABLE IF EXISTS {provider_prefix}_frequent_location_thresholded'.format(provider_prefix=self.provider_prefix))
+        print(
+            'Checked and dropped frequent location table with accumulated percentage if existing. Elapsed time: {} seconds'.format(
+                hp.format_two_point_time(timer, time.time())))
+        timer = time.time()
+        print('Creating and insert frequent location thresholded table ')
+        raw_sql = hp.sql_to_string('statistics/reports/frequent_locations/frequent_locations_thresholded.sql')
+        query = raw_sql.format(provider_prefix=self.provider_prefix, admin=admin, threshold=self.frequent_location_percentage)
+        cursor.execute(query)
+        print(
+            'Inserted into frequent location thresholded table. \nElapsed time: {time} seconds. '
+                .format(time=hp.format_two_point_time(timer, time.time())))
+        print('########## FINISHED CREATING FREQUENT LOCATION TABLE ##########')
+
+    def frequent_location_night(self):
+        cursor = self.hive.cursor
+        print('########## CREATE FREQUENT LOCATION NIGHT TABLE ##########')
+        print('Checking and dropping frequent location night table if existing.')
+        timer = time.time()
+        admin = self.od_admin_unit
+        cursor.execute('DROP TABLE IF EXISTS {provider_prefix}_frequent_location_night'.format(provider_prefix=self.provider_prefix))
+        print('Checked and dropped frequent location night table if existing. Elapsed time: {} seconds'.format(
+            hp.format_two_point_time(timer, time.time())))
+        timer = time.time()
+        print('Creating frequent location night table')
+        raw_sql = hp.sql_to_string('statistics/reports/frequent_locations/create_frequent_locations_night.sql')
+        query = raw_sql.format(provider_prefix=self.provider_prefix, admin_params=admin + '_id string')
+        cursor.execute(query)
+
+        print('Created frequent location night table. Elapsed time: {} seconds'.format(hp.format_two_point_time(timer, time.time())))
+        timer = time.time()
+        print('Inserting into frequent location night table')
+        raw_sql = hp.sql_to_string('statistics/reports/frequent_locations/frequent_locations_night.sql')
+        query = raw_sql.format(provider_prefix=self.provider_prefix, admin_params=admin + '_id', admin=admin)
+        cursor.execute(query)
+        print('Inserted into frequent location night table.\nResult are in the table named {provider_prefix}_frequent_location_night\nElapsed time: {time} seconds. '
+              .format(provider_prefix=self.provider_prefix, time=hp.format_two_point_time(timer, time.time())))
+        timer = time.time()
+        print('Dropping freq location night with accumulated percentage')
+        cursor.execute(
+            'DROP TABLE IF EXISTS {provider_prefix}_freq_with_acc_wsum_night'.format(provider_prefix=self.provider_prefix))
+        print(
+            'Checked and dropped frequent location night table with accumulated percentage if existing. Elapsed time: {} seconds'.format(
+                hp.format_two_point_time(timer, time.time())))
+        timer = time.time()
+        print('Creating and insert freq night with acc wsum Table (Frequent Location Night) with accumulated percentage')
+        raw_sql = hp.sql_to_string('statistics/reports/frequent_locations/frequent_locations_wsum_night.sql')
+        query = raw_sql.format(provider_prefix=self.provider_prefix, admin=admin)
+        cursor.execute(query)
+        print(
+            'Inserted into frequent location night table with accumulated percentage. \nElapsed time: {time} seconds. '
+                .format(time=hp.format_two_point_time(timer, time.time())))
+        timer = time.time()
+        print('Dropping frequent location thresholded night table')
+        cursor.execute(
+            'DROP TABLE IF EXISTS {provider_prefix}_frequent_location_thresholded_night'.format(provider_prefix=self.provider_prefix))
+        print(
+            'Checked and dropped frequent location night table with accumulated percentage if existing. Elapsed time: {} seconds'.format(
+                hp.format_two_point_time(timer, time.time())))
+        timer = time.time()
+        print('Creating and insert frequent location thresholded night table ')
+        raw_sql = hp.sql_to_string('statistics/reports/frequent_locations/frequent_locations_thresholded_night.sql')
+        query = raw_sql.format(provider_prefix=self.provider_prefix, admin=admin, threshold=self.frequent_location_percentage)
+        cursor.execute(query)
+        print(
+            'Inserted into frequent location thresholded night table. \nElapsed time: {time} seconds. '
+                .format(time=hp.format_two_point_time(timer, time.time())))
+
+        print('########## FINISHED CREATING FREQUENT LOCATION NIGHT TABLE ##########')
+
+    def rank1_frequent_location(self):
+        cursor = self.hive.cursor
+        print('########## CREATE RANK 1 FREQUENT LOCATION TABLE ##########')
+        admin = self.od_admin_unit
+        create_param = admin + '_id string'
+        timer = time.time()
+        print('Checking and dropping rank 1 frequent location table if existing.')
+        cursor.execute(
+            'DROP TABLE IF EXISTS {provider_prefix}_la_cdr_uid_home'.format(provider_prefix=self.provider_prefix))
+        print('Checked and dropped rank 1 frequent location table if existing. Elapsed time: {} seconds'.format(
+            hp.format_two_point_time(timer, time.time())))
+        timer = time.time()
+        print('Creating rank 1 frequent location table')
+        raw_sql = hp.sql_to_string('origin_destination/create_la_cdr_uid_home.sql')
+        query = raw_sql.format(provider_prefix=self.provider_prefix, admin_params=create_param)
+        cursor.execute(query)
+        print('Created rank 1 frequent location table. Elapsed time: {} seconds'.format(
+            hp.format_two_point_time(timer, time.time())))
+        timer = time.time()
+        print('Inserting into rank 1 frequent location table')
+        raw_sql = hp.sql_to_string('origin_destination/insert_la_cdr_uid_home.sql')
+        query = raw_sql.format(provider_prefix=self.provider_prefix)
+        cursor.execute(query)
+        print('Inserted into rank 1 frequent location table (located in {provider_prefix}_la_cdr_uid_home). Elapsed time: {time} seconds'
+            .format(provider_prefix=self.provider_prefix, time=
+            hp.format_two_point_time(timer, time.time())))
+        print('########## FINISHED CREATING RANK 1 FREQUENT LOCATION TABLE ##########')

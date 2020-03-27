@@ -1,0 +1,2 @@
+CREATE TABLE IF NOT EXISTS {provider_prefix}_cell_tower_data_preprocess({arg_create})
+ROW FORMAT DELIMITED FIELDS TERMINATED BY ',' LINES TERMINATED BY '\n' STORED AS SEQUENCEFILE
