@@ -1,7 +1,7 @@
 .idea/
 cdrenv/
 japan.json
-config.json
-config_big.json
+configs/config.json
+configs/config_big.json
 __pycache__
-output/
+not_used/

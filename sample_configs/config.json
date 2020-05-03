@@ -1,0 +1,76 @@
+{
+	"hadoop_data_path":"/disk2/data/Chaichan/",
+	"provider_prefix":"DTAC3",
+	"db_name" : "cdrproject",
+
+	"input_delimiter":",",
+	"input_files" :["ais.csv"],
+	"_comment": ["if time format is well formed (like yyyy/mm/dd or dd-mm-yyyy and colons(:) separating time, then leave it blank",
+	"if the time format has no separator then indicate it (ex. yyyyMMdd (can't be automatically recognized) hh:mm:ss)"],
+	"input_file_time_format": "yyyyMMdd hh:mm:ss",
+	"input_file_have_header_comment_": "put 1 if there is a header row, otherwise 0",
+	"input_file_have_header": 1,
+
+	"input_cell_tower_files" : ["cdr_cell_tower.csv"],
+	"input_cell_tower_delimiter":",",
+	"input_cell_tower_have_header": 1,
+
+	"check_duplicate_comment_": "will check duplicate in the cdr raw datafile and cell tower file",
+	"check_duplicate": true,
+	"check_invalid_lat_lng_comment_": "filter invalid lat_lng (both 0 or one of it is null)",
+	"check_invalid_lat_lng": true,
+	"host": "hadoopmaster.apichon.com",
+	"port": 10000,
+	"user": "rsstudent",
+
+	"frequent_locations_percentage": 80,
+
+	"output_report_location": "output_reports_small_latest",
+	"output_graph_location": "graphical_reports_small_latest",
+
+	"od_admin_unit": "ADMIN1",
+	"od_date": "2016-05-01",
+
+	"interpolation_poi_file_location": "/hadoop/hive/data/bangladesh/bangladesh.landscan2010_poi.tsv",
+	"interpolation_osm_file_location": "/hadoop/hive/data/bangladesh/bangladesh.osm_road_with_waterway.tsv",
+	"interpolation_voronoi_file_location": "/hadoop/hive/data/bangladesh/gp_voronoi.tsv",
+	"max_size_cdr_by_uid": 500,
+	"max_size_interpolation": 50,
+
+	"cdr_data_layer_comment_": ["do not remove or change the name of the mandatory output columns",
+								"if you don't have anything to map to the output, put -1 in the output_no",
+								"if you have input that is not used and not mapped, insert a row with input_no = -1 and output_no = -1",
+								"If a column is in your raw table, put input_no non-negative in the order of your column order",
+								"network_type must be in 2G, 3G, 4G, 5G or put -1 to the output_no of both network_type and call_type",
+								"call_type must be in Voice, Data, Call and SMS or put -1 to the output_no of both network_type and call_type",
+								"note that in 1-1 mapping both input_no and output_no are non negative",
+								"you need to import all the columns of your raw file and the output_no may be -1"],
+
+	"cdr_data_layer":[
+		{"input_no":1, "input_name":"SUBID", "data_type":"String",  "output_no":1,   "name":"UID", "custom": ""},
+		{"input_no":-1, "input_name":"IMEI", "data_type":"String",  "output_no":2,   "name":"IMEI", "custom": ""},
+		{"input_no":-1, "input_name":"IMSI", "data_type":"String",  "output_no":3,   "name":"IMSI", "custom": ""},
+		{"input_no":2, "input_name":"CDATE", "data_type":"String",  "output_no":-1,   "name":"CALL_DATE", "custom": ""},
+		{"input_no":3, "input_name":"CTIME", "data_type":"String",  "output_no":4,   "name":"CALL_TIME",  "custom": "CONCAT(CDATE,' ',CTIME)"},
+		{"input_no":4, "input_name":"DURATION", "data_type":"String",  "output_no":5,   "name":"DURATION", "custom": ""},
+		{"input_no":5, "input_name":"CELLID", "data_type":"String",  "output_no":6,   "name":"CELL_ID", "custom": ""},
+		{"input_no":6, "input_name":"LATITUDE", "data_type":"String",  "output_no":7,   "name":"LATITUDE", "custom": ""},
+		{"input_no":7, "input_name":"LONGITUDE", "data_type":"String",  "output_no":8,   "name":"LONGITUDE", "custom": ""},
+		{"input_no":9, "input_name":"NETWORK_TYPE", "data_type":"String",  "output_no":10,   "name":"NETWORK_TYPE", "custom": ""},
+		{"input_no":8, "input_name":"CALL_TYPE", "data_type":"String",  "output_no":9,   "name":"CALL_TYPE", "custom": ""}
+ ],
+
+	"cdr_cell_tower":[
+		{"input_no":1, "input_name":"BTSID", "data_type":"String",  "output_no":-1,   "name":"UID"},
+		{"input_no":2, "input_name":"SITE_NAME", "data_type":"String",  "output_no":-1,   "name":"SITE_NAME"},
+		{"input_no":3, "input_name":"LONGITUDE", "data_type":"String",  "output_no":3,   "name":"LONGITUDE"},
+		{"input_no":4, "input_name":"LATITUDE", "data_type":"String",  "output_no":4,   "name":"LATITUDE"},
+		{"input_no":5, "input_name":"CELLID", "data_type":"String",  "output_no":5,   "name":"CELL_ID" },
+		{"input_no":6, "input_name":"CELLNAME", "data_type":"String",  "output_no":-1,   "name":"CELLNAME" },
+		{"input_no":7, "input_name":"CI", "data_type":"String",  "output_no":-1,   "name":"CI" },
+		{"input_no":8, "input_name":"AZIMUTH", "data_type":"String",  "output_no":-1,   "name":"AZIMUTH" },
+		{"input_no":9, "input_name":"DISTRICT", "data_type":"String",  "output_no":6,   "name":"ADMIN1", "geojson_filename": "japan.json", "geojson_col_name": "nam"},
+		{"input_no":10, "input_name":"PROVINCE", "data_type":"String",  "output_no":7,   "name":"ADMIN2", "geojson_filename": "", "geojson_col_name": ""}
+	]
+
+}

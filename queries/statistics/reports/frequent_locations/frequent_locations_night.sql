@@ -1,8 +1,9 @@
-INSERT INTO  TABLE {provider_prefix}_frequent_location_night SELECT a1.uid, a2.cell_id,
-count(a1.uid) as tcount, ROW_NUMBER() OVER(PARTITION BY a1.uid, a2.cell_id order by count(a1.uid) DESC) as rank,
-count(a1.uid)/SUM(count(a1.uid)) OVER(partition by a1.uid, a2.cell_id) * 100 as percentage
-, a2.longitude, a2.latitude, a3.{admin_params} from {provider_prefix}_consolidate_data_all a1
-JOIN {provider_prefix}_cell_tower_data_preprocess a2  ON(a1.cell_id = a2.cell_id)
-JOIN {provider_prefix}_cell_tower_data_{admin} a3 on(a2.latitude = a3.latitude and a2.longitude = a3.longitude)
-where hour(a1.call_time) in (0,1,2,3,4,5,6,7,20,21,22,23) group by a1.uid, a2.latitude,  a2.longitude , a2.cell_id, a3.{admin_params}
+INSERT INTO TABLE {provider_prefix}_frequent_locations_night SELECT a1.uid,
+count(a1.uid) as tcount, ROW_NUMBER() OVER(PARTITION BY a1.uid order by count(a1.uid) DESC) as rank,
+count(a1.uid)/SUM(count(a1.uid)) OVER(partition by a1.uid) * 100 as ppercent
+, concat(a1.latitude, ' : ', a1.longitude) as unique_location, a1.latitude, a1.longitude,
+a2.{admin_params} from {provider_prefix}_consolidate_data_all a1
+JOIN {provider_prefix}_cell_tower_data_{admin} a2 on(a1.latitude = a2.latitude and a1.longitude = a2.longitude)
+where hour(a1.call_time) in (0,1,2,3,4,5,6,7,20,21,22,23)
+group by a1.uid, concat(a2.latitude, ' : ', a2.longitude), a1.latitude, a1.longitude, a2.{admin_params}
 order by a1.uid, rank ASC

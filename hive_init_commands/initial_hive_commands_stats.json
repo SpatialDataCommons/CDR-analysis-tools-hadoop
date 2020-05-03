@@ -1,0 +1,17 @@
+{
+  "hive_commands": [
+	"set hive.exec.dynamic.partition.mode=nonstrict", 
+	"set hive.exec.dynamic.partition=true", 
+	"set hive.exec.max.dynamic.partitions.pernode=4000", 
+	"set hive.exec.max.created.files=150000", 
+	"set hive.enforce.bucketing=true", 
+	"set mapred.map.tasks.speculative.execution=false",
+	"set mapred.reduce.tasks.speculative.execution=false",
+	"set hive.mapred.reduce.tasks.speculative.execution=false",
+	"set hive.map.aggr=false",
+	"set mapred.reduce.slowstart.completed.maps=0.98",
+	"set mapred.job.reuse.jvm.num.tasks=50", 
+	"set hive.support.sql11.reserved.keywords=false",
+    "use {db_name}"
+  ]
+}
