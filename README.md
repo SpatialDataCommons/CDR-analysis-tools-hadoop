@@ -198,7 +198,7 @@ install all requirement packages in requirements.txt using command
 Go to [config.json](sample_configs/config.json) or [config_big.json](sample_configs/config_big.json) to see the configuration files to setup the variables and 
 start mapping your data.
 
-Then go to [run_prepare_cdr_and_mapping.py](run_prepare_cdr_and_mapping.py) in the #user section and run
+Then go to [run_prepare_cdr_and_mapping.py](run_prepare_cdr_and_mapping.py) in the user section and run
 
 * python3 run_prepare_cdr_and_mapping.py -c {config_file}
 
