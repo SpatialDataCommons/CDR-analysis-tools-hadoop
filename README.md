@@ -34,8 +34,11 @@ Structure this package
 |         - Relocation PoI
 |         - Route Interpolation with transpotation network
 ```
-See [Statistics Report Section](../master/Statistics/)
+After preparing the data, see:
 
+* [Statistics Report](../master/Statistics/)
+* [Origin Destination](../master/Origin_Destination/)
+* [Interpolation](../master/Interpolation)
 
 ## Data preparation
 The user needs 2 files for the tool, a cdr file and a location mapping file. Both of them come with different column names and formats. To process CDR data, the data needs to be in the format that is compatible with the tools. The mapping json file maps from your prepared raw csv files to Hive tables ready for the processing and a mapping scheme for each file has to be done by the user. 

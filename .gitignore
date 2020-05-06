@@ -5,3 +5,4 @@ configs/config.json
 configs/config_big.json
 __pycache__
 not_used/
+venv

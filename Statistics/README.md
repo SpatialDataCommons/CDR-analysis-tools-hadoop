@@ -6,7 +6,7 @@ To illustrate, a simple csv file for cdr and mapping will be used and they are l
 Tables obtained from the script [run_prepare_cdr_and_mapping.py](../run_prepare_cdr_and_mapping.py).
 See the [first page](../README.md) for how to prepare a CDR file and a cell tower mapping file. The following are the columns 
 of the CDR consolidate data table.
-* CDR Consolidate Data Table 
+* CDR Consolidate Data Table ({provider_prefix}_consolidate_data_all)
 ```
 UID          : Unique Identifier of each user
 IMEI          : International Mobile Equipment Identity (IMEI) of Caller
@@ -19,7 +19,7 @@ NETWORK_TYPE  : Type of the network (2G, 3G, 4G, 5G)
 Longitude    : Real Number (decimal degree) in WGS84
 Latitude     : Real Number(decimal degree) in WGS84
 ```
-* Cell Tower Mapping Preprocess Table
+* Cell Tower Mapping Preprocess Table ({provider_prefix}_cell_tower_data_preprocess)
 ```
 CELL_ID      : Unique Cell Tower ID (LAC+CellID)
 Longitude    : Real Number (decimal degree) in WGS84
@@ -31,7 +31,8 @@ Admin2       : Administration Unit 2 name (if any)
 .
 AdminN       : Administration Unit N name (if any)
 ```
-* Cell Tower Data Admin X Table (For generating sequence numbers of an administration unit in case of duplication)
+* Cell Tower Data Admin X Table ({provider_prefix}_cell_tower_data_adminX)
+    * for generating sequence numbers of an administration unit in case of duplication
 ```
 AdminX_ID       : Administration Unit X name
 AdminX_Name     : Name of the Administration Unit X
@@ -40,11 +41,13 @@ Longitude    : Real Number (decimal degree) in WGS84
 Latitude     : Real Number (decimal degree) in WGS84
 ```
 ## Usage
+Note: the configuration needs to be set first. See the [first page](../README.md) in the configuration section.
+
 run command
 * python3 [run_statistics.py](../run_statistics.py) -c {config_file}
 
 Example
-* python3 run_statistics.py -c [config_big.json](../sample_configs/config_big.json)
+* python3 run_statistics.py -c sample_configs/[config_big.json](../sample_configs/config_big.json)
 
 If you wish to execute some of the features, you can comment some lines in the file in main() of [run_statistics.py](../run_statistics.py) 
 in the user section 

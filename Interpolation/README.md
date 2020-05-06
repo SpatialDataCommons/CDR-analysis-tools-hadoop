@@ -6,7 +6,7 @@ The tool will perform the following operations:
 
 Results are the route interpolation of a CDR data.
 ## Prerequisites
-* CDR Consolidate Data Table 
+* CDR Consolidate Data Table ({provider_prefix}_consolidate_data_all)
     * obtained from the script [run_prepare_cdr_and_mapping.py](../run_prepare_cdr_and_mapping.py).
 See the [first page](../README.md) for how to prepare a CDR file and a cell tower mapping file. The following are the columns 
 of the CDR consolidate data table. * means the column is required to have some valid values.
@@ -26,13 +26,27 @@ NETWORK_TYPE  : Type of the network (2G, 3G, 4G, 5G)
 * OSM road network data
 * Voronoi data of Cell tower/Base Station location
 
+# Configuration
+The configuration of the connection of hadoop server and selection needs to be set prior to this.
+See the [first page](../README.md) in the configuration section.
+Then, in the config file, set five following fields:
+* interpolation_poi_file_location: set to be the local path of the poi file
+* interpolation_osm_file_location: set to be the local path of the osm file
+* interpolation_voronoi_file_location: set to be the local path of the voronoi file
+* max_size_cdr_by_uid: set to be the maximum array size of cdr of each particular user
+* max_size_interpolation: set to be the max size of interpolation
+according to what you have in the cell tower mapping raw data
+* od_date: set to the date you want to perform origin destination to (format "yyyy-mm-dd")
+
+For example, see [config_big.json](../sample_configs/config_big.json) in line from 34 to 38
+
 # Route Interpolation
 run the following command
 * python3 [run_interpolation.py](../run_interpolation.py) -c {config_file}
 
 Example
 
-* run python3 run_interpolation.py -c config_big.json
+* run python3 run_interpolation.py -c sample_configs/config_big.json
 
 To edit further, the user can go to [cdr_interpolation.py](../Common/cdr_interpolation.py) in  
 calculate_interpolation()
