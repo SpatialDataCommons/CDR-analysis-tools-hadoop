@@ -141,8 +141,7 @@ def make_graph(xs, x_label, ys, y_label, header, filename, des_pair_1=None,
     plt.savefig(filename)
 
 
-def extract_mapping_data(config):
-    data = {}
+def extract_mapping_data(config, data):
     mappings = [config.cdr_data_layer, config.cdr_cell_tower]
     # Extract arguments
     for i in range(0, len(mappings)):
@@ -207,7 +206,7 @@ def extract_mapping_data(config):
             data.arg_cell_map, data.arg_cell_raw, data.arg_cell_create = \
                 arguments_map, arguments_raw, arguments_prep
             print(data.arg_cell_map, data.arg_cell_create)
-        return data
+
 
 if __name__ == '__main__':
     make_graph([1, 2, 3, 4], 'x', [1, 2, 3, 4], 'y', 'TEST', 'test')

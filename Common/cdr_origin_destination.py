@@ -40,7 +40,6 @@ class OriginDestination:
         print('Inserting into {provider_prefix}_la_cdr_all_with_ant_zone_by_uid table'
               .format(provider_prefix=provider_prefix))
         query = raw_sql.format(provider_prefix=provider_prefix, target_admin=od_admin_unit, od_date=self.config.od_date)
-        print(query)
         cursor.execute(query)
 
         print('Inserted into {provider_prefix}_la_cdr_all_with_ant_zone_by_uid table. Elapsed time: {time} seconds'

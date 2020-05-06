@@ -243,7 +243,6 @@ class HiveTableCreator:
         print('Creating preprocess cdr table.')
         raw_sql = sql_to_string('cdr_and_mapping/create_preprocess_cdr.sql')
         query = raw_sql.format(args=', '.join(arg_cdr_prep), provider_prefix=provider_prefix)
-        print(query)
         cursor.execute(query)
 
         print('Created preprocess cdr table. Elapsed time: {} seconds'
@@ -254,7 +253,6 @@ class HiveTableCreator:
         print('Columns in preprocess table mapped: ' + ', '.join(arg_cdr_map))
         raw_sql = sql_to_string('cdr_and_mapping/insert_preprocess_cdr.sql')
         query = raw_sql.format(distinct=distinct, arg=', '.join(arg_cdr_map), provider_prefix=provider_prefix)
-        print(query)
         cursor.execute(query)
         print('Inserted into preprocess cdr table. Elapsed time: {} seconds'
               .format(format_two_point_time(timer, time.time())))
@@ -277,7 +275,7 @@ class HiveTableCreator:
         latitude = res[0][0]
         longitude = res[0][1]
         arg_cdr_con_with_join_cond =[]
-        if (latitude == -1 and longitude == -1) or True:
+        if (latitude == -1 and longitude == -1):
             print('Join to make consolidate')
             for arg in arg_cdr_con:
                 if str.lower(arg) in ['longitude', 'latitude']:
@@ -301,7 +299,6 @@ class HiveTableCreator:
         raw_sql = sql_to_string('cdr_and_mapping/create_consolidate_cdr.sql')
         query = raw_sql.format(provider_prefix=provider_prefix, arg_prep=' ,'.join(arg_cdr_prep))
         cursor.execute(query)
-        print(query)
         print('Created consolidate cdr table. Elapsed time: {} seconds'
               .format(format_two_point_time(timer, time.time())))
         timer = time.time()
@@ -310,7 +307,6 @@ class HiveTableCreator:
         print('Inserting into the consolidate table')
         raw_sql = sql_to_string(insert_script_loc)
         query = raw_sql.format(provider_prefix=provider_prefix, arg_con=', '.join(arg_cdr_con_with_join_cond))
-        print(query)
         cursor.execute(query)
         print('Inserted into consolidate cdr table. Elapsed time: {} seconds'
               .format(format_two_point_time(timer, time.time())))

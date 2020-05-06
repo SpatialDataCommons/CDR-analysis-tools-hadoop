@@ -1,6 +1,6 @@
 {
 	"hadoop_data_path":"/disk2/data/Chaichan/",
-	"provider_prefix":"big6",
+	"provider_prefix":"big7",
 	"db_name" : "cdrproject",
 
 	"input_delimiter":",",
@@ -25,8 +25,8 @@
 
 	"frequent_locations_percentage": 80,
 
-	"output_report_location": "output_reports_big_joincon",
-	"output_graph_location": "graphical_reports_big_joincon",
+	"output_report_location": "big7",
+	"output_graph_location": "big7",
 
 	"od_admin_unit": "admin1",
 	"od_date": "2016-03-01",

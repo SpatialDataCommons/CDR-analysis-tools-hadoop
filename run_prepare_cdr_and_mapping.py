@@ -2,6 +2,7 @@ from Common.config_object import Config
 from Common.hive_create_tables import HiveTableCreator
 from Common.hive_connection import HiveConnection
 from Common.helper import extract_mapping_data, format_two_point_time
+from Common.cdr_data import CDRData
 import argparse
 import time
 
@@ -21,9 +22,11 @@ def main():
 
     config = Config(args.config)
     HiveConnection(host=config.host, port=config.port, user=config.user)
-    cdr_data = extract_mapping_data(config)
+    cdr_data = CDRData()
+    extract_mapping_data(config, cdr_data)
 
     # initialize hive and create tables
+
     table_creator = HiveTableCreator(config, cdr_data)
     table_creator.initialize('hive_init_commands/initial_hive_commands_stats.json')  # init hive
     table_creator.create_tables()
