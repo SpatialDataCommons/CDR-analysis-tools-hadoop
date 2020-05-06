@@ -36,7 +36,6 @@ Then, in the config file, set five following fields:
 * max_size_cdr_by_uid: set to be the maximum array size of cdr of each particular user
 * max_size_interpolation: set to be the max size of interpolation
 according to what you have in the cell tower mapping raw data
-* od_date: set to the date you want to perform origin destination to (format "yyyy-mm-dd")
 
 For example, see [config_big.json](../sample_configs/config_big.json) in line from 34 to 38
 
