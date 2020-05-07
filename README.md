@@ -44,7 +44,7 @@ After preparing the data, see:
 The user needs 2 files for the tool, a cdr file and a location mapping file. Both of them come with different column names and formats. To process CDR data, the data needs to be in the format that is compatible with the tools. The mapping json file maps from your prepared raw csv files to Hive tables ready for the processing and a mapping scheme for each file has to be done by the user. 
 
 ### a CSV file for CDR records
-To analyse the CDR data, the user needs to provide the tools with a CDR file in the csv format. It needs to contain
+To analyse the CDR data, the user needs to provide the tools with a CDR file in the csv format. The files include the de-identified CDR where any personally identifiable information (such as IMSI and IMEI) is encrypted in an unreversable manner. Hereinafter IMSI and IMEI mean de-identified IMSI and IMEI. The file needs to contain the following data items:
 ```
 UID          : Unique Identifier of each user
 IMEI          : International Mobile Equipment Identity (IMEI) of Caller
