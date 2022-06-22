@@ -4,7 +4,7 @@ cycler==0.10.0
 impyla==0.16.2
 kiwisolver==1.1.0
 matplotlib==3.2.0
-numpy==1.18.1
+numpy==1.22.0
 pandas==1.0.1
 ply==3.11
 pure-sasl==0.6.2
